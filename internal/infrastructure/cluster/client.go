@@ -38,7 +38,7 @@ func New(allPeers []int, port int) *Client {
 }
 
 // Verifica se é líder (uso externo)
-func (c *Client) AmILeader() bool {
+func (c *Client) IsLeader() bool {
 	return c.bullyElection.IsLeader()
 }
 
