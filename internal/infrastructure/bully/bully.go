@@ -13,18 +13,26 @@ const (
 
 // Responsável pela lógica de eleição e sincronização entre servers
 type BullyElection struct {
-	serverID int   // Por enquanto, é a porta do servidor
-	leaderID int   // ID do líder
-	peers    []int // IDs dos outros servidores
-	state    int   // pode estar em eleição ou pós-eleição
+	serverID   int         // Por enquanto, é a porta do servidor
+	leaderID   int         // ID do líder
+	peers      []int       // IDs dos outros servidores
+	peersState map[int]int // 1 se vivo, 0 se morto
+	state      int         // pode estar em eleição ou pós-eleição
 }
 
 func New(serverID int, peers []int) *BullyElection {
+	// Seta todos os servidores como mortos
+	peersSt := make(map[int]int)
+	for _, peer := range peers {
+		peersSt[peer] = 0
+	}
+
 	return &BullyElection{
-		serverID: serverID,
-		leaderID: 0,
-		peers:    peers,
-		state:    leaderless,
+		serverID:   serverID,
+		leaderID:   0,
+		peers:      peers,
+		peersState: peersSt,
+		state:      leaderless,
 	}
 }
 
