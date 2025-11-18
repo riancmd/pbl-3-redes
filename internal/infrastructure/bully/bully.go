@@ -3,6 +3,10 @@ package bully
 import (
 	"errors"
 	"log/slog"
+	"net/http"
+	"strconv"
+	"sync"
+	"time"
 )
 
 const (
@@ -18,6 +22,7 @@ type BullyElection struct {
 	peers      []int       // IDs dos outros servidores
 	peersState map[int]int // 1 se vivo, 0 se morto
 	state      int         // pode estar em eleição ou pós-eleição
+	mu         *sync.Mutex // mutex pra coisas importantes
 }
 
 func New(serverID int, peers []int) *BullyElection {
@@ -33,6 +38,7 @@ func New(serverID int, peers []int) *BullyElection {
 		peers:      peers,
 		peersState: peersSt,
 		state:      leaderless,
+		mu:         &sync.Mutex{},
 	}
 }
 
@@ -86,4 +92,49 @@ func (b *BullyElection) StartElection() {
 // Torna sem líder
 func (b *BullyElection) SetLeaderless() {
 	b.state = leaderless
+}
+
+// Envia get pro endpoint de health
+func (b *BullyElection) IsAlive(port int, res map[int]int) {
+	// Cria um mini cliente (no caso, de uso ligeiro) para mandar a request
+	healthClient := &http.Client{
+		Timeout: 500 * time.Millisecond,
+	}
+	resp, err := healthClient.Get("http://localhost:" + strconv.Itoa(port) + "/internal/health")
+
+	if err != nil {
+		slog.Error(err.Error())
+	}
+
+	defer resp.Body.Close()
+	defer b.mu.Unlock()
+
+	// Verifica os status code
+	if resp.StatusCode == http.StatusOK {
+		b.mu.Lock()
+		res[port] = 1
+	} else {
+		b.mu.Lock()
+		res[port] = 0
+	}
+}
+
+// Verifica o estado dos outros servidores
+func (b *BullyElection) HealthCheck() {
+	// Cria um waitgroup de goroutines para guardar todas as healthchecks
+	var wg sync.WaitGroup
+
+	results := make(map[int]int)
+
+	// passa por cada peer e lança um goroutine
+	for _, peer := range b.peers {
+		wg.Go(func() {
+			b.IsAlive(peer, results)
+		})
+	}
+
+	// espera todas completarem
+	wg.Wait()
+
+	b.peersState = results
 }
