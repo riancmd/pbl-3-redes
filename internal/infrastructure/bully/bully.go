@@ -138,3 +138,8 @@ func (b *BullyElection) HealthCheck() {
 
 	b.peersState = results
 }
+
+// Função de heartbeat, para rodar a cada segundo
+func (b *BullyElection) HeartBeat() {
+
+}
