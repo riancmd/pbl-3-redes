@@ -9,7 +9,16 @@ const (
 	NONE TransactionType = ""
 )
 
+// Molde de Data:
+// * PC: [0] - UserID, [1] - BoosterID
+// * TD: [0] - UserID1, [1] - UserID2, [2] - User1CardID, [3] - User2CardID
+// * BR: [0] - UserID1, [1] - UserID2, [2] - User1Result, [3] - User2Result
+
 type Transaction struct {
 	Type TransactionType
-	Data []byte
+	Data []byte // guarda informações essenciais da
+
+	// informações de assinatura, para garantir segurança da transação
+	PublicKey []byte // public key do usuário que enviou primeiro
+	Signature []byte // assinatura gerada pela chave privada do usuário
 }
