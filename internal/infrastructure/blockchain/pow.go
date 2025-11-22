@@ -44,7 +44,7 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 }
 
 // função core do PoW
-func (pow *ProofOfWork) Run() (int, []bytes) {
+func (pow *ProofOfWork) Run() (n int, h []byte) {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
