@@ -232,6 +232,11 @@ func (c *Client) BuyBooster(boosterID int) error {
 		return err
 	}
 
+	// AQUI, AO INVÉS DE FAZER O REQUEST
+	// EU CHAMO UMA FUNÇÃO QUE IRÁ ADICIONAR A TRANSAÇÃO NA POOL DA BLOCKCHAIN
+	// ACRESCENTADA A TRANSAÇÃO, PRECISO SÓ VERIFICAR SE AQUELA TRANSAÇÃO É OU NÃO VÁLIDA
+	// UTILIZANDO O ID DO BOOSTER
+
 	// Crio a request com HTTP
 	req, err := http.NewRequest(
 		http.MethodDelete,

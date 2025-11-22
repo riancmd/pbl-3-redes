@@ -141,5 +141,13 @@ func (b *BullyElection) HealthCheck() {
 
 // Função de heartbeat, para rodar a cada segundo
 func (b *BullyElection) HeartBeat() {
+	for {
+		b.HealthCheck()
 
+		// checa se líder ainda está vivo
+		if b.peersState[b.GetLeader()] == 0 {
+			b.SetLeaderless()
+			b.StartElection()
+		}
+	}
 }
