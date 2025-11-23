@@ -301,3 +301,8 @@ func (c *Client) FindServer(uid string) int {
 	}
 	return c.GetServerID()
 }
+
+// Pega blockchain
+func (c *Client) GetLedger() {
+	return
+}

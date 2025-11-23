@@ -6,12 +6,13 @@ import (
 )
 
 type Blockchain struct {
+	Height int
 	Ledger []*Block
 	MPool  []models.Transaction
 }
 
 func New() *Blockchain {
-	return &Blockchain{Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}}
+	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}}
 }
 
 func (b *Blockchain) addTransaction(transaction models.Transaction) bool {
@@ -33,4 +34,9 @@ func (b *Blockchain) AddBlock(transaction []models.Transaction) {
 func Genesis() *Block {
 	baseTransaction := models.Transaction{Type: models.NONE, Data: []byte{}}
 	return NewBlock([]byte{}, []models.Transaction{baseTransaction})
+}
+
+// Função que atualiza ledger a depender do resultado de comparação de height no cluster
+func (b *Blockchain) UpdateLedger(l []*Block) {
+	b.Ledger = l
 }
