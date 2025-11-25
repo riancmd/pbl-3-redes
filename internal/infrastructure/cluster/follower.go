@@ -223,46 +223,6 @@ func (c *Client) MatchEnd(ID string) error {
 	return nil
 }
 
-// Sincroniza compra de carta
-func (c *Client) BuyBooster(boosterID int) error {
-	// Encapsula o dado com JSON
-	jsonData, err := json.Marshal(boosterID)
-
-	if err != nil {
-		return err
-	}
-
-	// AQUI, AO INVÉS DE FAZER O REQUEST
-	// EU CHAMO UMA FUNÇÃO QUE IRÁ ADICIONAR A TRANSAÇÃO NA POOL DA BLOCKCHAIN
-	// ACRESCENTADA A TRANSAÇÃO, PRECISO SÓ VERIFICAR SE AQUELA TRANSAÇÃO É OU NÃO VÁLIDA
-	// UTILIZANDO O ID DO BOOSTER
-
-	// Crio a request com HTTP
-	req, err := http.NewRequest(
-		http.MethodDelete,
-		"http://localhost:"+strconv.Itoa(c.bullyElection.GetLeader())+"/internal/cards/{"+strconv.Itoa(boosterID)+"}",
-		bytes.NewBuffer(jsonData))
-
-	if err != nil {
-		return err
-	}
-
-	resp, err := c.httpClient.Do(req)
-
-	if err != nil {
-		return err
-	}
-
-	defer resp.Body.Close()
-
-	// Verifica a resposta
-	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusNotFound {
-		return errors.New("booster doesn't exist")
-	}
-
-	return nil
-}
-
 // Sincroniza troca de carta
 func (c *Client) TradeCard(p1, p2 string, card models.Card) error {
 	// falta organizar a logica
@@ -302,7 +262,7 @@ func (c *Client) FindServer(uid string) int {
 	return c.GetServerID()
 }
 
-// Pega blockchain
+// Pega blockchain inicial
 func (c *Client) GetLedger() {
 	return
 }

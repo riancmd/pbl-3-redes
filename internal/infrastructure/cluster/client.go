@@ -1,11 +1,14 @@
 package cluster
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"pbl-2-redes/internal/infrastructure/blockchain"
 	"pbl-2-redes/internal/infrastructure/bully"
+	"pbl-2-redes/internal/models"
 	"strconv"
 	"time"
 )
@@ -87,7 +90,57 @@ func (c *Client) CheckBlockchainHeight() {
 
 			json.NewDecoder(resp2.Body).Decode(&ledger)
 
-			c.Blockchain.UpdateLedger(ledger)
+			err = c.Blockchain.UpdateLedger(ledger)
+
+			if err != nil {
+				slog.Error(err.Error())
+			}
 		}
 	}
+}
+
+// Sincroniza compra de carta
+func (c *Client) BuyBooster(transaction models.Transaction) error {
+	valid := blockchain.VerifySignature(transaction.PublicKey, transaction.Data, transaction.Signature)
+
+	if !valid {
+		return errors.New("invalid transaction")
+	}
+
+	// Encapsula o dado com JSON
+	jsonData, err := json.Marshal(boosterID)
+
+	if err != nil {
+		return err
+	}
+
+	// AQUI, AO INVÉS DE FAZER O REQUEST
+	// EU CHAMO UMA FUNÇÃO QUE IRÁ ADICIONAR A TRANSAÇÃO NA POOL DA BLOCKCHAIN
+	// ACRESCENTADA A TRANSAÇÃO, PRECISO SÓ VERIFICAR SE AQUELA TRANSAÇÃO É OU NÃO VÁLIDA
+	// UTILIZANDO O ID DO BOOSTER
+
+	// Crio a request com HTTP
+	req, err := http.NewRequest(
+		http.MethodDelete,
+		"http://localhost:"+strconv.Itoa(c.bullyElection.GetLeader())+"/internal/cards/{"+strconv.Itoa(boosterID)+"}",
+		bytes.NewBuffer(jsonData))
+
+	if err != nil {
+		return err
+	}
+
+	resp, err := c.httpClient.Do(req)
+
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	// Verifica a resposta
+	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusNotFound {
+		return errors.New("booster doesn't exist")
+	}
+
+	return nil
 }

@@ -8,7 +8,7 @@ import (
 )
 
 // verifica se a assinatura é correta
-func verifySignature(publicKeyBytes []byte, data []byte, signature []byte) bool {
+func VerifySignature(publicKeyBytes []byte, data []byte, signature []byte) bool {
 	// reconstruindo a assinatura nas diferentes variáveis
 	curve := elliptic.P256()
 	x := big.Int{}

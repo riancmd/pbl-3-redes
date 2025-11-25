@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"errors"
 	"log/slog"
 	"pbl-2-redes/internal/models"
 )
@@ -37,6 +38,10 @@ func Genesis() *Block {
 }
 
 // Função que atualiza ledger a depender do resultado de comparação de height no cluster
-func (b *Blockchain) UpdateLedger(l []*Block) {
-	b.Ledger = l
+func (b *Blockchain) UpdateLedger(l []*Block) error {
+	if len(b.Ledger) < len(l) {
+		b.Ledger = l
+		return nil
+	}
+	return errors.New("Ledger já atualizado.")
 }

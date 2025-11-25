@@ -25,22 +25,30 @@ func (u *UseCases) AddCards(newBooster models.Booster) error {
 	return nil
 }
 
-// Pega um booster do vault e o retorna
-func (u *UseCases) GetBooster() (models.Booster, error) {
+func (u *UseCases) BoosterRequest() error {
 	// verifica se vault vazio
 	empty := u.repos.Card.CardsEmpty()
 
 	if empty {
 		slog.Error("vault is empty")
-		return models.Booster{}, errors.New("vault is empty")
+		return errors.New("vault is empty")
 	}
 
 	// pega um indice aleatorio
 	generator := rand.New(rand.NewSource(time.Now().UnixNano())) // gerador
 	randomIndex := generator.Intn(u.repos.Card.Length())
 
-	u.sync.BuyBooster(randomIndex)
+	err := u.sync.BuyBooster(randomIndex)
 
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Pega um booster do vault e o retorna
+func (u *UseCases) GetBooster(randomIndex int) (models.Booster, error) {
 	return u.repos.Card.GetBooster(randomIndex)
 }
 
