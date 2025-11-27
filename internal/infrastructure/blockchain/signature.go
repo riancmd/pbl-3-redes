@@ -5,11 +5,20 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
+	"encoding/json"
+	"log/slog"
 	"math/big"
 )
 
 // verifica se a assinatura é correta
-func VerifySignature(publicKeyBytes []byte, data []byte, signature []byte) bool {
+func VerifySignature(publicKeyBytes []byte, data []string, signature []byte) bool {
+	jsonData, err := json.Marshal(data)
+
+	if err != nil {
+		slog.Error("error while encoding json")
+		return false
+	}
+
 	// reconstruindo a assinatura nas diferentes variáveis
 	curve := elliptic.P256()
 	x := big.Int{}
@@ -29,7 +38,7 @@ func VerifySignature(publicKeyBytes []byte, data []byte, signature []byte) bool 
 	s.SetBytes(signature[(signatureLen / 2):])
 
 	// faz a verificação com a chave pública, o hash e a assinatura
-	hash := sha256.Sum256(data)
+	hash := sha256.Sum256(jsonData)
 	return ecdsa.Verify(&publicKey, hash[:], &r, &s)
 }
 

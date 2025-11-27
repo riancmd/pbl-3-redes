@@ -3,7 +3,6 @@ package cluster
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"log/slog"
 	"net/http"
 	"pbl-2-redes/internal/infrastructure/blockchain"
@@ -101,49 +100,42 @@ func (c *Client) Nakamoto() {
 
 // Sincroniza compra de carta
 func (c *Client) BuyBooster(transaction models.Transaction) error {
-	// Pega slice com os dados de Data
-	txData := []string{}
+	// Encapsula o dado com JSON
+	jsonData, err := json.Marshal(transaction)
 
-	err := json.Unmarshal(transaction.Data, &txData)
 	if err != nil {
 		return err
 	}
-
-	// Encapsula o dado com JSON
-	//jsonData, err := json.Marshal(transaction.Data)
-
-	//if err != nil {
-	//	return err
-	//}
 
 	// AQUI, AO INVÉS DE FAZER O REQUEST
 	// EU CHAMO UMA FUNÇÃO QUE IRÁ ADICIONAR A TRANSAÇÃO NA POOL DA BLOCKCHAIN
 	// ACRESCENTADA A TRANSAÇÃO, PRECISO SÓ VERIFICAR SE AQUELA TRANSAÇÃO É OU NÃO VÁLIDA
 	// UTILIZANDO O ID DO BOOSTER
 
-	c.Blockchain.AddTransaction(transaction)
+	txErr := c.Blockchain.AddTransaction(transaction)
 
-	// Crio a request com HTTP
-	req, err := http.NewRequest(
-		http.MethodDelete,
-		"http://localhost:"+strconv.Itoa(c.bullyElection.GetLeader())+"/internal/cards/{"+strconv.Itoa(boosterID)+"}",
-		bytes.NewBuffer(jsonData))
-
-	if err != nil {
-		return err
+	if txErr != nil {
+		return txErr
 	}
 
-	resp, err := c.httpClient.Do(req)
+	// passa por todos os peers enviando a nova transação
+	for _, peer := range c.peers {
+		req, err := http.NewRequest(
+			http.MethodPost,
+			"http://localhost:"+strconv.Itoa(peer)+"/internal/blockchain/mempool/",
+			bytes.NewBuffer(jsonData))
 
-	if err != nil {
-		return err
-	}
+		if err != nil {
+			return err
+		}
 
-	defer resp.Body.Close()
+		resp, err := c.httpClient.Do(req)
 
-	// Verifica a resposta
-	if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusNotFound {
-		return errors.New("booster doesn't exist")
+		if err != nil {
+			return err
+		}
+
+		defer resp.Body.Close()
 	}
 
 	return nil
