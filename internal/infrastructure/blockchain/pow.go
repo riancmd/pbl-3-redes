@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"math"
@@ -29,10 +30,17 @@ func NewProofOfWork(b *Block) *ProofOfWork {
 
 // prepara os dados para o PoW
 func (pow *ProofOfWork) prepareData(nonce int) []byte {
-	data := bytes.Join(
+	// Serializa struct de transações
+	data, err := json.Marshal(pow.block.Transactions)
+	if err != nil {
+		slog.Error(err.Error())
+		return nil
+	}
+
+	data = bytes.Join(
 		[][]byte{
 			pow.block.PreviousHash,
-			pow.block.Transactions,
+			data,
 			IntToHex(pow.block.Timestamp),
 			IntToHex(int64(targetBits)),
 			IntToHex(int64(nonce)),

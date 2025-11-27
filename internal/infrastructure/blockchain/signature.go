@@ -1,6 +1,7 @@
 package blockchain
 
 import (
+	"bytes"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/sha256"
@@ -30,4 +31,17 @@ func VerifySignature(publicKeyBytes []byte, data []byte, signature []byte) bool 
 	// faz a verificação com a chave pública, o hash e a assinatura
 	hash := sha256.Sum256(data)
 	return ecdsa.Verify(&publicKey, hash[:], &r, &s)
+}
+
+// verifica duplicidade de assinatura
+func (b *Blockchain) AntiReplay(publicKeyBytes []byte, signature []byte) bool {
+	for _, block := range b.Ledger {
+		for _, transaction := range block.Transactions {
+			if bytes.Equal(transaction.Signature, signature) && bytes.Equal(transaction.PublicKey, publicKeyBytes) {
+				return false
+			}
+		}
+	}
+
+	return true
 }

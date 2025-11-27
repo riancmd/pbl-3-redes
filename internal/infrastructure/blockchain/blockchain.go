@@ -16,9 +16,9 @@ func New() *Blockchain {
 	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}}
 }
 
-func (b *Blockchain) addTransaction(transaction models.Transaction) bool {
-	if !verifySignature(transaction.PublicKey, transaction.Data, transaction.Signature) {
-		slog.Error("Erro: Assinatura inválida.")
+func (b *Blockchain) AddTransaction(transaction models.Transaction) bool {
+	if !VerifySignature(transaction.PublicKey, transaction.Data, transaction.Signature) {
+		slog.Error("invalid signature")
 		return false
 	}
 	b.MPool = append(b.MPool, transaction)
@@ -26,15 +26,15 @@ func (b *Blockchain) addTransaction(transaction models.Transaction) bool {
 }
 
 // Função que adiciona bloco na blockchain
-func (b *Blockchain) AddBlock(transaction []models.Transaction) {
+func (b *Blockchain) AddBlock(transactions []*models.Transaction) {
 	prevBlock := b.Ledger[len(b.Ledger)-1]
-	newBlock := NewBlock(prevBlock.PreviousHash, transaction)
+	newBlock := NewBlock(prevBlock.PreviousHash, transactions)
 	b.Ledger = append(b.Ledger, newBlock)
 }
 
 func Genesis() *Block {
 	baseTransaction := models.Transaction{Type: models.NONE, Data: []byte{}}
-	return NewBlock([]byte{}, []models.Transaction{baseTransaction})
+	return NewBlock([]byte{}, []*models.Transaction{&baseTransaction})
 }
 
 // Função que atualiza ledger a depender do resultado de comparação de height no cluster

@@ -63,7 +63,7 @@ func (c *Client) GetServerID() int {
 }
 
 // Verifica se a blockchain dos peers é maior que a sua
-func (c *Client) CheckBlockchainHeight() {
+func (c *Client) Nakamoto() {
 	// dá um GET no endpoint de height de cada peer
 	for _, peer := range c.peers {
 		resp, err := c.httpClient.Get("http://localhost:" + strconv.Itoa(peer) + "/internal/blockchain/height") // Endereço temporário, resolver
@@ -101,23 +101,27 @@ func (c *Client) CheckBlockchainHeight() {
 
 // Sincroniza compra de carta
 func (c *Client) BuyBooster(transaction models.Transaction) error {
-	valid := blockchain.VerifySignature(transaction.PublicKey, transaction.Data, transaction.Signature)
+	// Pega slice com os dados de Data
+	txData := []string{}
 
-	if !valid {
-		return errors.New("invalid transaction")
-	}
-
-	// Encapsula o dado com JSON
-	jsonData, err := json.Marshal(boosterID)
-
+	err := json.Unmarshal(transaction.Data, &txData)
 	if err != nil {
 		return err
 	}
+
+	// Encapsula o dado com JSON
+	//jsonData, err := json.Marshal(transaction.Data)
+
+	//if err != nil {
+	//	return err
+	//}
 
 	// AQUI, AO INVÉS DE FAZER O REQUEST
 	// EU CHAMO UMA FUNÇÃO QUE IRÁ ADICIONAR A TRANSAÇÃO NA POOL DA BLOCKCHAIN
 	// ACRESCENTADA A TRANSAÇÃO, PRECISO SÓ VERIFICAR SE AQUELA TRANSAÇÃO É OU NÃO VÁLIDA
 	// UTILIZANDO O ID DO BOOSTER
+
+	c.Blockchain.AddTransaction(transaction)
 
 	// Crio a request com HTTP
 	req, err := http.NewRequest(
