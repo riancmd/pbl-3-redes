@@ -21,7 +21,7 @@ type ClusterSync interface {
 	// Sincroniza nova batalha
 	MatchEnd(string) error
 	// Sincroniza compra de carta
-	BuyBooster(boosterID int) error
+	BuyBooster(transaction models.Transaction) error
 	// Sincroniza troca de carta
 	TradeCard(UID, CID string, card models.Card) error
 	// Sincroniza criação de usuários, para não permitir cópias

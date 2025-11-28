@@ -11,8 +11,8 @@ import (
 )
 
 // verifica se a assinatura é correta
-func VerifySignature(publicKeyBytes []byte, data []string, signature []byte) bool {
-	jsonData, err := json.Marshal(data)
+func VerifySignature(publicKeyBytes []byte, UserData []string, signature []byte) bool {
+	jsonData, err := json.Marshal(UserData)
 
 	if err != nil {
 		slog.Error("error while encoding json")

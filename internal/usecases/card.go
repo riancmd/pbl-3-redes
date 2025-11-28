@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"math/rand"
 	"pbl-2-redes/internal/models"
+	"strconv"
 	"time"
 )
 
@@ -25,7 +26,8 @@ func (u *UseCases) AddCards(newBooster models.Booster) error {
 	return nil
 }
 
-func (u *UseCases) BoosterRequest() error {
+// recebe as informações da transação, como a assinatura e publicKey
+func (u *UseCases) BoosterRequest(txReq models.TransactionRequest) error {
 	// verifica se vault vazio
 	empty := u.repos.Card.CardsEmpty()
 
@@ -38,7 +40,16 @@ func (u *UseCases) BoosterRequest() error {
 	generator := rand.New(rand.NewSource(time.Now().UnixNano())) // gerador
 	randomIndex := generator.Intn(u.repos.Card.Length())
 
-	err := u.sync.BuyBooster(randomIndex)
+	// cria a struct de transação
+	transaction := models.Transaction{
+		Type:      models.PC,
+		Data:      []string{txReq.UserID, strconv.Itoa(randomIndex)},
+		UserData:  []string{string(models.PC), txReq.UserID, txReq.Timestamp},
+		PublicKey: txReq.PublicKey,
+		Signature: txReq.Signature,
+	}
+
+	err := u.sync.BuyBooster(transaction)
 
 	if err != nil {
 		return err

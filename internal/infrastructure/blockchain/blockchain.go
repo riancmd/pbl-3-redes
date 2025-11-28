@@ -17,7 +17,7 @@ func New() *Blockchain {
 }
 
 func (b *Blockchain) AddTransaction(transaction models.Transaction) error {
-	if !VerifySignature(transaction.PublicKey, transaction.Data, transaction.Signature) {
+	if !VerifySignature(transaction.PublicKey, transaction.UserData, transaction.Signature) {
 		slog.Error("invalid signature")
 		return errors.New("invalid signature")
 	}
@@ -46,7 +46,7 @@ func (b *Blockchain) AddBlock(transactions []*models.Transaction) {
 }
 
 func Genesis() *Block {
-	baseTransaction := models.Transaction{Type: models.NONE, Data: []byte{}}
+	baseTransaction := models.Transaction{Type: models.NONE, Data: []string{}}
 	return NewBlock([]byte{}, []*models.Transaction{&baseTransaction})
 }
 
@@ -104,4 +104,13 @@ func (b *Blockchain) GreedyCheck(t models.Transaction) error {
 	}
 
 	return nil
+}
+
+// Verifica se precisa minerar novo bloco
+func (b *Blockchain) Mine() {
+	// verifica se tem x quantidade de transações ou se passou timeout
+	// IMPORTANTE: essa lógica tem que ser feita junto a logica de verificar a chegada de novos blocos
+	for {
+
+	}
 }

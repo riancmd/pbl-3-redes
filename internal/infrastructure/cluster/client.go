@@ -140,3 +140,5 @@ func (c *Client) BuyBooster(transaction models.Transaction) error {
 
 	return nil
 }
+
+// Opera a blockchain (go routine responsável)
