@@ -9,9 +9,17 @@ import (
 	"log/slog"
 	"math"
 	"math/big"
+	"time"
 )
 
 const targetBits = 24
+
+const (
+	idle         = 0
+	mining       = 1
+	checkingNode = 2
+	cancel       = 3
+)
 
 type ProofOfWork struct {
 	block  *Block
@@ -52,7 +60,7 @@ func (pow *ProofOfWork) prepareData(nonce int) []byte {
 }
 
 // função core do PoW
-func (pow *ProofOfWork) Run() (n int, h []byte) {
+func (pow *ProofOfWork) Run(sc *chan int) (n int, h []byte) {
 	var hashInt big.Int
 	var hash [32]byte
 	nonce := 0
@@ -61,16 +69,40 @@ func (pow *ProofOfWork) Run() (n int, h []byte) {
 
 	// coloca que o máximo que o nonce pode chegar é o valor máximo suportado de um inteiro de 64 bits
 	for nonce < math.MaxInt64 {
-		data := pow.prepareData(nonce)
-		hash = sha256.Sum256(data)
-		fmt.Printf("\r%x", hash)
-		hashInt.SetBytes(hash[:])
+		// verifica se precisa continuar minerando
+		select {
+		case msg := <-*sc:
+			// se for para minerar
+			if msg == mining {
+				// prepara os dados
+				data := pow.prepareData(nonce)
+				// cria o hash
+				hash = sha256.Sum256(data)
+				//fmt.Printf("\r%x", hash)
+				hashInt.SetBytes(hash[:])
 
-		if hashInt.Cmp(pow.target) == -1 {
-			break
-		} else {
-			nonce++
+				// faz a comparação
+				if hashInt.Cmp(pow.target) == -1 {
+					break
+				} else {
+					nonce++
+				}
+			}
+			if msg == checkingNode {
+				// resolver essa linha depois
+				time.Sleep(1)
+			}
+			if msg == cancel {
+				break
+			}
+		case <-time.After(1 * time.Second):
+			continue
 		}
+
+	}
+
+	for nonce < math.MaxInt64 {
+
 	}
 	fmt.Print("\n")
 	return nonce, hash[:]

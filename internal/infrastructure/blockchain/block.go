@@ -13,22 +13,15 @@ type Block struct {
 	Nonce        int                   // nonce usado para o hash
 }
 
-func NewBlock(p []byte, t []*models.Transaction) *Block {
-	// Serializa struct de transações
-	//data, err := json.Marshal(&t)
-	//if err != nil {
-	//	slog.Error(err.Error())
-	//	return nil
-	//}
-
+func NewBlock(prevHash []byte, t []*models.Transaction, StateChan *chan int) *Block {
 	// Cria primeira versão do bloco, sem hash ainda
-	block := &Block{Timestamp: time.Now().Unix(), Transactions: t, PreviousHash: p}
+	block := &Block{Timestamp: time.Now().Unix(), Transactions: t, PreviousHash: prevHash}
 
 	// Cria o PoW
 	pow := NewProofOfWork(block)
 
 	// Guarda o nonce que for encontrado e joga no bloco
-	nonce, hash := pow.Run()
+	nonce, hash := pow.Run(StateChan)
 	block.Hash = hash[:]
 	block.Nonce = nonce
 

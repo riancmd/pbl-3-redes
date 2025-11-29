@@ -4,16 +4,18 @@ import (
 	"errors"
 	"log/slog"
 	"pbl-2-redes/internal/models"
+	"time"
 )
 
 type Blockchain struct {
-	Height int
-	Ledger []*Block
-	MPool  []models.Transaction
+	Height    int
+	Ledger    []*Block
+	MPool     []models.Transaction
+	StateChan *chan int
 }
 
 func New() *Blockchain {
-	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}}
+	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}, StateChan: make(chan int)}
 }
 
 func (b *Blockchain) AddTransaction(transaction models.Transaction) error {
@@ -38,11 +40,14 @@ func (b *Blockchain) AddTransaction(transaction models.Transaction) error {
 	return nil
 }
 
+// Pega último hash
+func (b *Blockchain) GetLastHash() []byte {
+	return b.Ledger[len(b.Ledger)].Hash
+}
+
 // Função que adiciona bloco na blockchain
-func (b *Blockchain) AddBlock(transactions []*models.Transaction) {
-	prevBlock := b.Ledger[len(b.Ledger)-1]
-	newBlock := NewBlock(prevBlock.PreviousHash, transactions)
-	b.Ledger = append(b.Ledger, newBlock)
+func (b *Blockchain) AddBlock(block *Block) {
+	b.Ledger = append(b.Ledger, block)
 }
 
 func Genesis() *Block {
@@ -106,11 +111,46 @@ func (b *Blockchain) GreedyCheck(t models.Transaction) error {
 	return nil
 }
 
+// Minera blocos
+// Uma solução mais simples seria fazer as funções de forma atômica e conjunta (no laço for, se precisar checar bloco, guarda nonce
+// e checa novo nó. se não for adicionado, continua. se for, cancela mineração.)
+func (b *Blockchain) MineBlock(length int) {
+	// cria slice temp de transações para serem adicionadas no bloco
+	t := []*models.Transaction{}
+
+	// guarda as transações selecionadas
+	for i := range length {
+		t = append(t, &b.MPool[i])
+		// remove da pool
+		//
+	}
+
+	// pega o último hash
+	previousHash := b.GetLastHash()
+
+	newBlock := NewBlock(previousHash, t, b.StateChan)
+
+	// se deu tudo certo
+	if newBlock != nil {
+		b.AddBlock(newBlock)
+	} else {
+		slog.Error("failed while mining a new block.")
+	}
+}
+
 // Verifica se precisa minerar novo bloco
-func (b *Blockchain) Mine() {
+func (b *Blockchain) RunBlockchain() {
 	// verifica se tem x quantidade de transações ou se passou timeout
 	// IMPORTANTE: essa lógica tem que ser feita junto a logica de verificar a chegada de novos blocos
 	for {
-
+		timer := time.NewTimer(2 * time.Second)
+		tempopassou := <-timer.C
+		// se chegou numa quantidade de transações
+		if len(b.MPool) >= 5 {
+			go b.MineBlock(5)
+		}
+		if tempopassou && len(b.MPool) >= 1 {
+			go b.MineBlock(len(b.MPool))
+		}
 	}
 }
