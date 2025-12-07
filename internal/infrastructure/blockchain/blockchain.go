@@ -1,21 +1,24 @@
 package blockchain
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"pbl-2-redes/internal/models"
+	"sync"
 	"time"
 )
 
 type Blockchain struct {
-	Height    int
-	Ledger    []*Block
-	MPool     []models.Transaction
-	StateChan *chan int
+	Height         int
+	Ledger         []*Block
+	MPool          []models.Transaction
+	IncomingBlocks chan *Block // possivelmente desnecessário
+	MX             sync.Mutex  // mutex local para quando for mexer na pool
 }
 
 func New() *Blockchain {
-	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}, StateChan: make(chan int)}
+	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}, IncomingBlocks: make(chan *Block), MX: sync.Mutex{}}
 }
 
 func (b *Blockchain) AddTransaction(transaction models.Transaction) error {
@@ -142,15 +145,68 @@ func (b *Blockchain) MineBlock(length int) {
 func (b *Blockchain) RunBlockchain() {
 	// verifica se tem x quantidade de transações ou se passou timeout
 	// IMPORTANTE: essa lógica tem que ser feita junto a logica de verificar a chegada de novos blocos
+	ticker := time.NewTicker(2 * time.Second)
+
+	// variável de contexto que controla a mineração
+	// ela serve para comunicar os sinais de cancelamento ou pausa quando for necessário
+	var ctx context.Context
+	var cancelF func()
+
+	// channel que guarda o bloco quando finalizado
+	result := make(chan *Block)
+	state := idle
+
 	for {
-		timer := time.NewTimer(2 * time.Second)
-		tempopassou := <-timer.C
+		select {
+		// CASO TIMEOUT, MINERA
+		case <-ticker.C:
+			b.MX.Lock()
+			// guarda tamanho da pool naquele instante
+			poolLength := len(b.MPool)
+			b.MX.Unlock()
+
+			// se a pool tiver pelo menos 1 transação
+			// e tiver menos que 5 e nn tiver minerando
+			// tenta criar bloco
+			if poolLength >= 1 && poolLength < 5 && state == idle {
+				ctx, cancelF = context.WithCancel(context.Background())
+				b.MX.Lock()
+				state = mining
+				b.MX.Unlock()
+
+				go b.MineBlock(poolLength)
+			}
+
+			// caso tenha mais q 5 transações
+			if poolLength >= 5 && state == idle {
+				ctx, cancelF = context.WithCancel(context.Background())
+				b.MX.Lock()
+				state = mining
+				b.MX.Unlock()
+
+				go b.MineBlock(5)
+			}
+
+		// caso tenha chegado bloco
+		// AJEITAR
+		case incomingBlock := <-b.IncomingBlocks:
+			// se tiver minerado para
+			if state == mining {
+
+			}
+		}
 		// se chegou numa quantidade de transações
 		if len(b.MPool) >= 5 {
 			go b.MineBlock(5)
 		}
 		if tempopassou && len(b.MPool) >= 1 {
 			go b.MineBlock(len(b.MPool))
+
 		}
 	}
+}
+
+// Verifica novos blocos
+func (b *Blockchain) CheckNewBlocks() {
+
 }

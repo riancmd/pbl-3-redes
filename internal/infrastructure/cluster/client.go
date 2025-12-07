@@ -143,9 +143,11 @@ func (c *Client) BuyBooster(transaction models.Transaction) error {
 
 // Opera a blockchain (go routine responsável)
 func (c *Client) StartBlockchain() {
-	for {
-		chan := make(chan string, 1) {
-			
-		}
-	}
+	go c.Blockchain.RunBlockchain()
+}
+
+func (c *Client) AddNewBlock(block *Blockchain.Block) {
+	// recebe do usecases, joga no canal
+	// e ai esse canal será verificado pela goroutine rodando NA BLOCKCHAIN
+	c.Blockchain.IncomingBlocks <- block
 }
