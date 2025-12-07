@@ -15,10 +15,10 @@ import (
 const targetBits = 24
 
 const (
-	idle         = 0
-	mining       = 1
-	checkingNode = 2
-	cancel       = 3
+	idle       = 0
+	mining     = 1
+	validating = 2
+	cancel     = 3
 )
 
 type ProofOfWork struct {

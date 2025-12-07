@@ -152,8 +152,7 @@ func (b *Blockchain) RunBlockchain() {
 	var ctx context.Context
 	var cancelF func()
 
-	// channel que guarda o bloco quando finalizado
-	result := make(chan *Block)
+	// estado que guarda o momento atual da blockchain (idle, mining, validating, cancel)
 	state := idle
 
 	for {
@@ -177,36 +176,36 @@ func (b *Blockchain) RunBlockchain() {
 				go b.MineBlock(poolLength)
 			}
 
-			// caso tenha mais q 5 transações
-			if poolLength >= 5 && state == idle {
-				ctx, cancelF = context.WithCancel(context.Background())
-				b.MX.Lock()
-				state = mining
-				b.MX.Unlock()
-
-				go b.MineBlock(5)
-			}
-
 		// caso tenha chegado bloco
 		// AJEITAR
 		case incomingBlock := <-b.IncomingBlocks:
 			// se tiver minerado para
-			if state == mining {
-
+			state = validating
+			if incomingBlock != nil {
+				b.CheckNewBlock(incomingBlock)
 			}
 		}
-		// se chegou numa quantidade de transações
-		if len(b.MPool) >= 5 {
+		// se chegou numa quantidade de transações (ou seja, não passou do timeout)
+		// caso tenha mais q 5 transações
+		b.MX.Lock()
+		if len(b.MPool) >= 5 && state == idle {
+			ctx, cancelF = context.WithCancel(context.Background())
+			b.MX.Lock()
+			state = mining
+			b.MX.Unlock()
+
 			go b.MineBlock(5)
 		}
-		if tempopassou && len(b.MPool) >= 1 {
-			go b.MineBlock(len(b.MPool))
-
-		}
+		b.MX.Unlock()
 	}
 }
 
 // Verifica novos blocos
-func (b *Blockchain) CheckNewBlocks() {
+func (b *Blockchain) CheckNewBlock(bloco *Block) {
+
+}
+
+// Checa mempool pelas transações do bloco
+func (b *Blockchain) RecheckMempool() {
 
 }
