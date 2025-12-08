@@ -1,6 +1,9 @@
 package usecases
 
-import "pbl-2-redes/internal/infrastructure/blockchain"
+import (
+	"pbl-2-redes/internal/infrastructure/blockchain"
+	"pbl-2-redes/internal/models"
+)
 
 func (u *UseCases) AddNewBlock(newBlock blockchain.Block) error {
 	err := u.sync.AddNewBlock(&newBlock)
@@ -10,4 +13,12 @@ func (u *UseCases) AddNewBlock(newBlock blockchain.Block) error {
 	}
 
 	return nil
+}
+
+func (u *UseCases) GetFirstTransaction() models.Transaction {
+	return u.repos.Transactions.GetFirstTransaction()
+}
+
+func (u *UseCases) TransactionsLength() int {
+	return u.repos.Transactions.Length()
 }
