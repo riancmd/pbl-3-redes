@@ -181,6 +181,15 @@ func (c *Client) AddNewBlock(block *blockchain.Block) error {
 	}
 }
 
+func (c *Client) AddNewTransaction(t models.Transaction) error {
+	err := c.Blockchain.AddTransaction(t)
+
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Pega blockchain
 func (c *Client) GetLedger() []blockchain.Block {
 	var ledger []blockchain.Block

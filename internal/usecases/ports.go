@@ -45,4 +45,6 @@ type ClusterSync interface {
 	AddNewBlock(incomingBlock *blockchain.Block) error
 	// Pega o ledger
 	GetLedger() []blockchain.Block
+	// Adiciona transação
+	AddNewTransaction(t models.Transaction) error
 }

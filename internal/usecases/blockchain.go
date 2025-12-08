@@ -37,6 +37,10 @@ func (u *UseCases) AddNewBlock(newBlock blockchain.Block) error {
 	return nil
 }
 
+func (u *UseCases) AddNewTransaction(t models.Transaction) error {
+	return u.sync.AddNewTransaction(t)
+}
+
 func (u *UseCases) GetFirstTransaction() models.Transaction {
 	return u.repos.Transactions.GetFirstTransaction()
 }
