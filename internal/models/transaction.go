@@ -14,11 +14,6 @@ const (
 	NONE TransactionType = ""
 )
 
-// Molde de Data:
-// * PC: [0] - UserID, [1] - BoosterID
-// * TD: [0] - UserID1, [1] - UserID2, [2] - User1CardID, [3] - User2CardID
-// * BR: [0] - BattleID, [1] - UserID1, [2] - UserID2, [3] - User1Result, [4] - User2Result
-
 type TransactionRequest struct {
 	Type      TransactionType
 	UserID    string
@@ -29,6 +24,11 @@ type TransactionRequest struct {
 
 // Molde de UserData
 // [0] - TransactionType, [1] - UID, [2] - Timestamp
+
+// Molde de Data:
+// * PC: [0] - UserID, [1] - BoosterID
+// * TD: [0] - UserID1, [1] - UserID2, [2] - User1CardID, [3] - User2CardID
+// * BR: [0] - BattleID, [1] - UserID1, [2] - UserID2, [3] - User1Result, [4] - User2Result
 
 type Transaction struct {
 	Type     TransactionType
@@ -41,5 +41,5 @@ type Transaction struct {
 }
 
 func (tra Transaction) Equals(t Transaction) bool {
-	return t.Type == tra.Type && bytes.Equal(t.PublicKey, tra.PublicKey) && bytes.Equal(t.Signature, tra.Signature) && slices.Equal(t.Data, tra.Data) && slices.Equal(t.UserData, tra.UserData)
+	return t.Type == tra.Type && bytes.Equal(t.PublicKey, tra.PublicKey) && bytes.Equal(t.Signature, tra.Signature) && slices.Equal(t.Data, tra.Data)
 }
