@@ -391,7 +391,6 @@ func handleResponse(extRes models.ExternalResponse) {
 		}
 
 	case enqueued:
-
 		var matchResp models.MatchResponse
 		json.Unmarshal(extRes.Data, &matchResp)
 		fmt.Printf("⏳ %s\n", matchResp.Message)

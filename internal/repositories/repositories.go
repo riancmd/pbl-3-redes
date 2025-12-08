@@ -5,6 +5,7 @@ import (
 	"pbl-2-redes/internal/repositories/cards"
 	"pbl-2-redes/internal/repositories/matches"
 	"pbl-2-redes/internal/repositories/queue"
+	"pbl-2-redes/internal/repositories/transactions"
 	"pbl-2-redes/internal/repositories/users"
 )
 
@@ -52,6 +53,13 @@ type Repositories struct {
 		UserEnqueued(string) bool
 		Length() int
 	}
+	Transactions interface {
+		GetAll() []models.Transaction
+		Enqueue(t models.Transaction)
+		Dequeue() error
+		GetFirstTransaction() models.Transaction
+		Length() int
+	}
 }
 
 func New() *Repositories {
@@ -61,5 +69,6 @@ func New() *Repositories {
 		Match:        matches.New(),
 		BattleQueue:  queue.New(),
 		TradingQueue: queue.New(),
+		Transactions: transactions.New(),
 	}
 }
