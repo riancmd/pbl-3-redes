@@ -267,3 +267,5 @@ func (b *Blockchain) RecheckMempool(transactions []*models.Transaction) {
 		}
 	}
 }
+
+//

@@ -10,6 +10,7 @@ import (
 	"pbl-2-redes/internal/infrastructure/bully"
 	"pbl-2-redes/internal/models"
 	"strconv"
+	"sync"
 	"time"
 )
 
@@ -46,7 +47,9 @@ func New(allPeers []int, port int) *Client {
 	if client.IsLeader() {
 		client.Blockchain = blockchain.New()
 	} else {
-		client.GetLedger()
+		channel := make(chan int)
+		client.Blockchain = &blockchain.Blockchain{Height: 0, Ledger: []*blockchain.Block{}, MPool: []models.Transaction{}, IncomingBlocks: make(chan blockchain.BlockTask), StateChan: &channel, MX: sync.Mutex{}}
+		client.Nakamoto()
 	}
 
 	return &client
@@ -95,6 +98,7 @@ func (c *Client) Nakamoto() {
 			if err != nil {
 				slog.Error(err.Error())
 			}
+			c.Blockchain.Height = len(ledger)
 		}
 	}
 }
