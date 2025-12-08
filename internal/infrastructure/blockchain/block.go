@@ -13,6 +13,12 @@ type Block struct {
 	Nonce        int                   // nonce usado para o hash
 }
 
+// para ser enviada na hora da verificação
+type BlockTask struct {
+	Block    *Block
+	OnFinish func(error)
+}
+
 func NewBlock(prevHash []byte, t []*models.Transaction, StateChan *chan int) *Block {
 	// Cria primeira versão do bloco, sem hash ainda
 	block := &Block{Timestamp: time.Now().Unix(), Transactions: t, PreviousHash: prevHash}

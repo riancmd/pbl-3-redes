@@ -3,6 +3,7 @@ package cluster
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"log/slog"
 	"net/http"
 	"pbl-2-redes/internal/infrastructure/blockchain"
@@ -146,8 +147,32 @@ func (c *Client) StartBlockchain() {
 	go c.Blockchain.RunBlockchain()
 }
 
-func (c *Client) AddNewBlock(block *Blockchain.Block) {
+func (c *Client) AddNewBlock(block *blockchain.Block) error {
 	// recebe do usecases, joga no canal
 	// e ai esse canal será verificado pela goroutine rodando NA BLOCKCHAIN
-	c.Blockchain.IncomingBlocks <- block
+
+	// cria uma struct que tem o bloco e uma função
+	// para executar logo depois de verificar se rolou ou não
+
+	// cria um canal onde o RunBlockchain pode conversar
+	resposta := make(chan error, 1)
+
+	// cria a tarefa que vai ser enviada (bloco p verificacao)
+	task := blockchain.BlockTask{
+		Block: block,
+		OnFinish: func(e error) {
+			resposta <- e
+		},
+	}
+
+	// envia
+	c.Blockchain.IncomingBlocks <- task
+
+	// espera a resposta
+	select {
+	case err := <-resposta:
+		return err
+	case <-time.After(5 * time.Second):
+		return errors.New("timeout na validação")
+	}
 }

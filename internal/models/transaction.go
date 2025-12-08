@@ -1,5 +1,10 @@
 package models
 
+import (
+	"bytes"
+	"slices"
+)
+
 type TransactionType string
 
 const (
@@ -33,4 +38,8 @@ type Transaction struct {
 	// informações de assinatura, para garantir segurança da transação
 	PublicKey []byte // public key do usuário que enviou primeiro
 	Signature []byte // assinatura gerada pela chave privada do usuário
+}
+
+func (tra Transaction) Equals(t Transaction) bool {
+	return t.Type == tra.Type && bytes.Equal(t.PublicKey, tra.PublicKey) && bytes.Equal(t.Signature, tra.Signature) && slices.Equal(t.Data, tra.Data) && slices.Equal(t.UserData, tra.UserData)
 }

@@ -1,6 +1,7 @@
 package usecases
 
 import (
+	"pbl-2-redes/internal/infrastructure/blockchain"
 	"pbl-2-redes/internal/models"
 )
 
@@ -38,4 +39,8 @@ type ClusterSync interface {
 	GetServerID() int
 	// Encontra qual o servidor dono daquele usuário
 	FindServer(UID string) int
+
+	// BLOCKCHAIN
+	// Adiciona na blockchain um incomingBlock
+	AddNewBlock(incomingBlock *blockchain.Block) error
 }

@@ -13,12 +13,13 @@ type Blockchain struct {
 	Height         int
 	Ledger         []*Block
 	MPool          []models.Transaction
-	IncomingBlocks chan *Block // possivelmente desnecessário
-	MX             sync.Mutex  // mutex local para quando for mexer na pool
+	IncomingBlocks chan BlockTask // possivelmente desnecessário
+	MX             sync.Mutex     // mutex local para quando for mexer na pool
+	blockOK        int            // 0 idle, 1 ok, 2 inválido
 }
 
 func New() *Blockchain {
-	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}, IncomingBlocks: make(chan *Block), MX: sync.Mutex{}}
+	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}, IncomingBlocks: make(chan BlockTask), MX: sync.Mutex{}}
 }
 
 func (b *Blockchain) AddTransaction(transaction models.Transaction) error {
@@ -50,6 +51,8 @@ func (b *Blockchain) GetLastHash() []byte {
 
 // Função que adiciona bloco na blockchain
 func (b *Blockchain) AddBlock(block *Block) {
+	b.RecheckMempool(block.Transactions)
+	// verificar antireplay etc ADICIONAD DPS
 	b.Ledger = append(b.Ledger, block)
 }
 
@@ -114,6 +117,32 @@ func (b *Blockchain) GreedyCheck(t models.Transaction) error {
 	return nil
 }
 
+// Verifica situações de ilegalidade ao adicionar bloco
+func (b *Blockchain) IllegalCheck(t models.Transaction) bool {
+	// verifica situações de ilegalidade no ledger
+	for _, block := range b.Ledger {
+		for _, transaction := range block.Transactions {
+			// na compra, se booster já foi comprado, desiste
+			if t.Type == models.PC && t.Data[1] == transaction.Data[1] {
+				return false
+			}
+			// na troca, se usuário 1 já trocou aquela carta, não troca
+			if t.Type == models.TD && t.Data[0] == transaction.Data[0] && t.Data[1] == transaction.Data[1] {
+				return false
+			}
+			// na troca, se usuário 2 já trocou aquela carta, não troca
+			if t.Type == models.TD && t.Data[1] == transaction.Data[1] && t.Data[3] == transaction.Data[3] {
+				return false
+			}
+			// na troca, se batalha já tiver registrada, desiste
+			if t.Type == models.BR && t.Data[0] == transaction.Data[0] {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // Minera blocos
 // Uma solução mais simples seria fazer as funções de forma atômica e conjunta (no laço for, se precisar checar bloco, guarda nonce
 // e checa novo nó. se não for adicionado, continua. se for, cancela mineração.)
@@ -154,6 +183,7 @@ func (b *Blockchain) RunBlockchain() {
 
 	// estado que guarda o momento atual da blockchain (idle, mining, validating, cancel)
 	state := idle
+	b.blockOK = 0
 
 	for {
 		select {
@@ -178,12 +208,18 @@ func (b *Blockchain) RunBlockchain() {
 
 		// caso tenha chegado bloco
 		// AJEITAR
-		case incomingBlock := <-b.IncomingBlocks:
+		case incomingTask := <-b.IncomingBlocks:
 			// se tiver minerado para
 			state = validating
-			if incomingBlock != nil {
-				b.CheckNewBlock(incomingBlock)
+			err := b.CheckNewBlock(incomingTask.Block)
+
+			if err != nil {
+				incomingTask.OnFinish(err)
+			} else {
+				b.AddBlock(incomingTask.Block)
+				incomingTask.OnFinish(nil)
 			}
+
 		}
 		// se chegou numa quantidade de transações (ou seja, não passou do timeout)
 		// caso tenha mais q 5 transações
@@ -201,11 +237,30 @@ func (b *Blockchain) RunBlockchain() {
 }
 
 // Verifica novos blocos
-func (b *Blockchain) CheckNewBlock(bloco *Block) {
+func (b *Blockchain) CheckNewBlock(block *Block) error {
+	pow := NewProofOfWork(block)
+	// faz validação por assinatura
+	if !pow.Validate() {
+		return errors.New("invalid signature")
+	}
 
+	// passa por todas as transações e vê se tem alguma ilegal
+	for _, t := range block.Transactions {
+		if !b.IllegalCheck(*t) {
+			return errors.New("invalid transactions")
+		}
+	}
+	return nil
 }
 
 // Checa mempool pelas transações do bloco
-func (b *Blockchain) RecheckMempool() {
-
+func (b *Blockchain) RecheckMempool(transactions []*models.Transaction) {
+	for _, t := range transactions {
+		for index, p := range b.MPool {
+			if p.Equals(*(t)) {
+				// remove se as transações forem iguais e já existirem lá na mempool
+				b.MPool = append(b.MPool[:index], b.MPool[index+1:]...)
+			}
+		}
+	}
 }
