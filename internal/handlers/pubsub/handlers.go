@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"pbl-2-redes/internal/models"
 	"pbl-2-redes/internal/usecases"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -466,5 +467,82 @@ func (h *PubSubHandlers) sendResponse(replyChannel, userID, responseType string,
 	// Publica no canal de reply do cliente
 	if err := h.rdb.Publish(h.ctx, replyChannel, respPayload).Err(); err != nil {
 		slog.Error("Falha ao publicar resposta para o cliente", "channel", replyChannel, "error", err)
+	}
+}
+
+// Go routine que vai ficar verificando novas compras, trocas e resultados de batalha
+func (h *PubSubHandlers) newTransactionLoop() {
+	for {
+		// fica num loop dando sleep
+		time.Sleep(50 * time.Millisecond)
+		// se tiver transação a ser realizada, realiza
+		if h.useCases.TransactionsLength() >= 1 {
+			// da pop na fila
+			t := h.useCases.GetFirstTransaction()
+			// olha o tipo de transação
+			switch t.Type {
+			// tipo: compra
+			case models.PC:
+				// pega id do booster
+				id, er := strconv.Atoi(t.Data[1])
+				if er != nil {
+					slog.Error(er.Error())
+				}
+				// envia booster pro usuário
+				booster, err := h.useCases.GetBooster(id)
+				if err != nil {
+					h.sendResponse("ClientChannel:"+t.Data[0], t.Data[0],
+						"packBought",
+						models.ClientPurchaseResponse{
+							Status:           true,
+							Message:          "Compar realizada!",
+							BoosterGenerated: booster,
+						})
+				}
+			// tipo: troca
+			case models.TD:
+				// pega id do usuário e verifica qual q ele tem que mandar (o que for do servidor)
+				if h.useCases.UIDExists(t.Data[0]) {
+					cartaRecebida, err := strconv.Atoi(t.Data[3])
+					if err != nil {
+
+					}
+					cartaEnviada, err := strconv.Atoi(t.Data[2])
+					if err != nil {
+
+					}
+				} else {
+					cartaRecebida, err := strconv.Atoi(t.Data[2])
+					if err != nil {
+
+					}
+					cartaEnviada, err := strconv.Atoi(t.Data[3])
+					if err != nil {
+
+					}
+				}
+			// tipo: resultado de batalha
+			case models.BR:
+				if h.useCases.UIDExists(t.Data[1]) {
+					battleID, err := strconv.Atoi(t.Data[0])
+					if err != nil {
+
+					}
+					result, err := t.Data[3]
+					if err != nil {
+
+					}
+				} else {
+					battleID, err := strconv.Atoi(t.Data[0])
+					if err != nil {
+
+					}
+					result, err := t.Data[4]
+					if err != nil {
+
+					}
+				}
+			}
+		}
 	}
 }
