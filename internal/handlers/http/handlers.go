@@ -32,6 +32,11 @@ func (h Handlers) Listen(port int) error {
 	h.registerMatchesEndpoints()
 	// Possui o endpoint /internal/health
 	h.registerHealthEndpoints()
+	// Possui o endpoint /internal/blockchain/ledger
+	h.registerLedgerEndpoints()
+	// Possui o endpoint /internal/blockchain/mempool
+	h.registerMempoolEndpoints()
+	
 
 	slog.Info("listening on", "port", port)
 
