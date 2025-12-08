@@ -3,9 +3,14 @@ package client
 import (
 	"bufio"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -17,7 +22,22 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/redis/go-redis/v9" // Conexão Redis
+	"github.com/redis/go-redis/v9"
+)
+
+
+var (
+	// Chaves ECDSA para assinatura e verificação 
+	privateKey *ecdsa.PrivateKey
+	publicKey  []byte
+)
+
+//Máquina de estados do cliente
+type ClientState string
+
+const (
+	StateActive     ClientState = "ACTIVE"     // Pronto para receber comandos do terminal
+	StateProcessing ClientState = "PROCESSING" // Aguardando resposta do servidor
 )
 
 var (
@@ -29,8 +49,8 @@ var (
 	ctx context.Context
 
 	// Variáveis para conexão UDP
-	udpPort  string
-	pingChan chan bool //Canal para parar a goroutine de heartbeating
+	udpPort     string
+	pingChan    chan bool //Canal para parar a goroutine de heartbeating
 
 	//Canal no redis para requisições de batalha ou compra ao servidor logado
 	serverChannel string
@@ -41,14 +61,15 @@ var (
 	loggedIn     bool
 	replyChannel string //Canal no Redis Cluster para o cliente receber respostas
 	battleId     string // Id da batalha que entrou
+	clientState  ClientState // Estado atual do cliente 
 
 	// dados do jogo
-	inventory  []*models.Card
-	invMu      sync.RWMutex
-	hand       []*models.Card
-	matchInfo  *models.Match
-	inBattle   bool
-	turnSignal chan struct{}
+	inventory   []*models.Card
+	invMu       sync.RWMutex
+	hand        []*models.Card
+	matchInfo   *models.Match
+	inBattle    bool
+	turnSignal  chan struct{}
 
 	// Novo mutex para dados da partida
 	matchMu sync.RWMutex
@@ -64,6 +85,7 @@ const (
 	giveup   string = "giveUp"
 	ping     string = "ping"
 	trade    string = "trade"
+	viewBlockchain string = "viewBlockchain"
 
 	//Tipos de respostas
 	registered    string = "registered"
@@ -81,6 +103,7 @@ const (
 	pong          string = "pong"
 	error         string = "error"
 	tradeEnqueued string = "tradeEnqueued"
+	blockchainView string = "blockchainView"
 
 	//Tipos de canais para dar Publish
 	AuthResquestChannel string = "AuthResquestChannel"
@@ -122,7 +145,21 @@ const (
 	scared    DreamState = "assustado"
 )
 
+
+
 func main() {
+	// Processo de criar as chaves
+	var err error
+	curve := elliptic.P256()
+	privateKey, err = ecdsa.GenerateKey(curve, rand.Reader)
+	if err != nil {
+		log.Fatalf("❌ Falha ao gerar chave privada: %v", err)
+	}
+
+	// Converte a chave pública em bytes (concatenando X e Y)
+	publicKey = append(privateKey.PublicKey.X.Bytes(), privateKey.PublicKey.Y.Bytes()...)
+	fmt.Printf("🔑 Chave Pública gerada (bytes): %x...\n", publicKey[:8])
+
 	//Endereços das instâncias dos redis
 	clusterAddrs := []string{
 		"redis-1:7000",
@@ -159,6 +196,7 @@ func main() {
 		Sanity:      make(map[string]int),
 		DreamStates: make(map[string]models.DreamState),
 	}
+	clientState = StateActive // Começa no estado ativo
 
 	// Goroutine para lidar com mensagens que chegam no canal pessoal do cliente
 	go handleServerMessages()
@@ -178,7 +216,7 @@ func handleServerMessages() {
 		log.Fatalf("Falha ao se inscrever no canal de resposta: %v", err)
 	}
 
-	//Canal da linguagem (diferente do canal em redis)
+	//Canal da linguagem Golang (diferente do canal em redis)
 	ch := pubsub.Channel()
 
 	for msg := range ch {
@@ -204,6 +242,12 @@ func handleServerMessages() {
 func showMenu() {
 	reader := bufio.NewReader(os.Stdin)
 	for {
+		if clientState == StateProcessing {
+			// Não aceita comandos do terminal enquanto espera a resposta
+			time.Sleep(100 * time.Millisecond)
+			continue
+		}
+
 		if inBattle {
 			<-turnSignal
 			handleBattleTurn()
@@ -221,6 +265,7 @@ func showMenu() {
 			fmt.Println("5. Batalhar")
 			fmt.Println("6. Trocar")
 			fmt.Println("7. Ping")
+			fmt.Println("9. Ver blockchain")
 		}
 		fmt.Println("8. Sair")
 		fmt.Print("Escolha uma opção: ")
@@ -228,6 +273,8 @@ func showMenu() {
 		input, _ := reader.ReadString('\n')
 		choice := strings.TrimSpace(input)
 
+		// Verifica se o estado deve ser alterado para PROCESSING antes de enviar a requisição
+		requiresProcessing := true
 		switch choice {
 		case "1":
 			if !loggedIn {
@@ -244,6 +291,7 @@ func showMenu() {
 		case "4":
 			if loggedIn {
 				printInventory()
+				requiresProcessing = false // Não interage com o servidor via Redis
 			}
 		case "5":
 			if loggedIn {
@@ -256,19 +304,32 @@ func showMenu() {
 		case "7":
 			if loggedIn {
 				handlePing()
+				requiresProcessing = false // Não interage com o servidor via Redis
 			}
 		case "8":
 			fmt.Println("💤 Bons sonhos...")
 			stopPinger()
 			return
+		case "9":
+			if loggedIn {
+				handleViewBlockchain()
+			}
 		default:
 			fmt.Println("Opção inválida.")
+			requiresProcessing = false
+		}
+
+		if requiresProcessing {
+			clientState = StateProcessing
+			fmt.Println("⏳ Enviando requisição, aguarde a resposta do servidor...")
 		}
 	}
 }
 
 func handleResponse(extRes models.ExternalResponse) {
+	clientState = StateActive // Volta ao estado de ativo quando recebeu uma resposta
 	clearScreen()
+
 	switch extRes.Type { //Decodificar para tipo de resposta mais exata
 	case registered:
 		var authResp models.AuthResponse
@@ -280,7 +341,7 @@ func handleResponse(extRes models.ExternalResponse) {
 			udpPort = authResp.UDPPort
 			serverChannel = authResp.ServerChannel
 
-			stopPinger()                  // Caso já exista algum pinger antigo (Deu login e saiu)
+			stopPinger()            // Caso já exista algum pinger antigo (Deu login e saiu)
 			pingChan = make(chan bool)    // Novo canal para controlar a parada do pinger heartbeating
 			go heartBeatHandler(pingChan) // Inicia o HeartBeat
 
@@ -300,7 +361,7 @@ func handleResponse(extRes models.ExternalResponse) {
 			udpPort = authResp.UDPPort
 			serverChannel = authResp.ServerChannel
 
-			stopPinger()                  // Caso já exista algum pinger antigo (Deu login e saiu)
+			stopPinger()            // Caso já exista algum pinger antigo (Deu login e saiu)
 			pingChan = make(chan bool)    // Novo canal para controlar a parada do pinger heartbeating
 			go heartBeatHandler(pingChan) // Inicia o HeartBeat
 
@@ -428,6 +489,14 @@ func handleResponse(extRes models.ExternalResponse) {
 		inBattle = false
 		fmt.Println("\n🤝 Empate! A partida terminou em um empate.")
 
+	case blockchainView:
+		var viewResp models.BlockchainResponse
+		if err := json.Unmarshal(extRes.Data, &viewResp); err != nil {
+			fmt.Printf("❌ Erro ao decodificar BlockchainResponse: %v\n", err)
+			return
+		}
+		printBlockchain(viewResp.Blocks)
+
 	case error:
 		var errResp models.ErrorResponse
 		json.Unmarshal(extRes.Data, &errResp)
@@ -438,7 +507,8 @@ func handleResponse(extRes models.ExternalResponse) {
 	}
 }
 
-// As função abaixo para cada opção do menu atualizada para lógica de PUB/SUB
+
+// Requisição de Registro 
 func handleRegister(reader *bufio.Reader) {
 	fmt.Print("Digite seu nome de usuário: ")
 	usernameInput, _ := reader.ReadString('\n')
@@ -458,6 +528,7 @@ func handleRegister(reader *bufio.Reader) {
 	publishRequest(AuthResquestChannel, req)
 }
 
+// Requisição de Login
 func handleLogin(reader *bufio.Reader) {
 	fmt.Print("Digite seu nome de usuário: ")
 	usernameInput, _ := reader.ReadString('\n')
@@ -477,18 +548,58 @@ func handleLogin(reader *bufio.Reader) {
 	publishRequest(AuthResquestChannel, req)
 }
 
+// Requisções de Compra
 func handleBuyPack() {
+	currentTimestamp := time.Now().UnixNano() // TimeStamp em nanosegundos
+	
+	// Dados a serem assinados (UserData da Transaction) - Usa o TimeStamp em string para ser serializado
+	dataToSign := []string{uid, buypack, fmt.Sprintf("%d", currentTimestamp)}
+
+	// Geração da assinatura
+	signature, err := signData(dataToSign)
+	if err != nil {
+		fmt.Printf("❌ Erro ao assinar requisição de compra: %v\n", err)
+		clientState = StateActive
+		return
+	}
+
 	req := models.PurchaseRequest{
 		UserId:             uid,
 		ClientReplyChannel: replyChannel,
+		PublicKey:          publicKey,
+		Signature:          signature,
+		Timestamp:          currentTimestamp,
 	}
 	publishRequest(BuyResquestChannel, req)
 }
 
+// Requisções de Batalha
 func handleEnqueue() {
+	if serverChannel == "" {
+		fmt.Println("❌ Canal do servidor não definido. Tente logar novamente.")
+		clientState = StateActive
+		return
+	}
+	
+	currentTimestamp := time.Now().UnixNano() //TimeStamp em nanosegundos
+	
+	// Dados a serem assinados (UserData da Transaction) - Usa o TimeStamp em string para ser serializado
+	dataToSign := []string{uid, battle, fmt.Sprintf("%d", currentTimestamp)}
+
+	// Geração da assinatura
+	signature, err := signData(dataToSign)
+	if err != nil {
+		fmt.Printf("❌ Erro ao assinar requisição de batalha: %v\n", err)
+		clientState = StateActive
+		return
+	}
+
 	req := models.MatchRequest{
 		UserId:             uid,
 		ClientReplyChannel: replyChannel,
+		PublicKey:          publicKey,
+		Signature:          signature,
+		Timestamp:          currentTimestamp,
 	}
 
 	bytesReq, err := json.Marshal(req)
@@ -509,28 +620,78 @@ func handleEnqueue() {
 func handleTradeEnqueue() {
 	if serverChannel == "" {
 		fmt.Println("❌ Canal do servidor não definido. Tente logar novamente.")
+		clientState = StateActive
 		return
 	}
-	req := models.TradeRequest{ // <-- Usa TradeRequest
+	
+	currentTimestamp := time.Now().UnixNano() // TimeStamp em nanosegundos
+	
+	// Dados a serem assinados (UserData da Transaction) - Usa o TimeStamp em string para ser serializado
+	dataToSign := []string{uid, trade, fmt.Sprintf("%d", currentTimestamp)}
+
+	// Geração da assinatura
+	signature, err := signData(dataToSign)
+	if err != nil {
+		fmt.Printf("❌ Erro ao assinar requisição de troca: %v\n", err)
+		clientState = StateActive
+		return
+	}
+
+	req := models.TradeRequest{
 		UserId:             uid,
 		ClientReplyChannel: replyChannel,
+		PublicKey:          publicKey,
+		Signature:          signature,
+		Timestamp:          currentTimestamp,
 	}
 
 	bytesReq, err := json.Marshal(req)
 	if err != nil {
 		fmt.Printf("❌ Erro ao serializar requisição de troca: %v\n", err)
+		clientState = StateActive
 		return
 	}
 
 	extReq := models.ExternalRequest{
-		Type:   trade, // <-- Tipo 'trade'
+		Type:   trade,
 		UserId: uid,
 		Data:   json.RawMessage(bytesReq),
 	}
 
-	publishRequest(serverChannel, extReq) // <-- Envia para fila PESSOAL do servidor
+	publishRequest(serverChannel, extReq)
 }
 
+
+// Requisição de ver a Blockchain
+func handleViewBlockchain() {
+    if serverChannel == "" {
+        fmt.Println("❌ Canal do servidor não definido. Tente logar novamente.")
+        clientState = StateActive
+        return
+    }
+
+    req := models.BlockchainViewRequest{
+        UserId:             uid,
+        ClientReplyChannel: replyChannel,
+    }
+
+    bytesReq, err := json.Marshal(req)
+    if err != nil {
+        fmt.Printf("❌ Erro ao serializar requisição de blockchain: %v\n", err)
+        clientState = StateActive 
+        return
+    }
+
+    extReq := models.ExternalRequest{
+        Type:   viewBlockchain,
+        UserId: uid,
+        Data:   json.RawMessage(bytesReq),
+    }
+
+    publishRequest(serverChannel, extReq)
+}
+
+//Requisição para jogada na batalha
 func handleBattleTurn() {
 	reader := bufio.NewReader(os.Stdin)
 	fmt.Printf("\nSua mão atual:\n")
@@ -563,7 +724,9 @@ func handleBattleTurn() {
 	useCard(cardToPlay)
 }
 
+// Requisição de Uso de Carta
 func useCard(card *models.Card) {
+
 	req := models.NewCardRequest{
 		BattleId:           battleId,
 		UserId:             uid,
@@ -595,7 +758,9 @@ func useCard(card *models.Card) {
 	}
 }
 
+// Requisição de desistência
 func giveUp() {
+
 	req := models.GameActionRequest{
 		BattleId:           battleId,
 		Type:               giveup,
@@ -681,6 +846,8 @@ func forceLogout() {
 	inBattle = false
 	stopPinger() // Para a goroutine de ping
 
+	clientState = StateActive 
+
 	clearScreen()
 	fmt.Println("\n=============================================")
 	fmt.Println("❌ Conexão com o servidor perdida (timeout UDP).")
@@ -724,7 +891,6 @@ func heartBeatHandler(stopChan <-chan bool) {
 			buffer := make([]byte, 16)
 			_, _, err = conn.ReadFromUDP(buffer)
 			if err != nil {
-				// --- DETECÇÃO DE FALHA ---
 				// Servidor não respondeu em 3 segundos.
 				conn.Close()
 				forceLogout() // Desloga
@@ -810,6 +976,79 @@ func publishRequest(channel string, payload interface{}) {
 	}
 
 	if err := rdb.LPush(ctx, channel, data).Err(); err != nil {
-		fmt.Printf("❌ Erro ao ENFILEIRAR  requisição: %v\n", err)
+		fmt.Printf("❌ Erro ao ENFILEIRAR  requisição: %v\n", err)
 	}
+}
+
+// Função de Assinatura ECDSA
+func signData(data interface{}) ([]byte, error) {
+	if privateKey == nil {
+		return nil, fmt.Errorf("chave privada não inicializada")
+	}
+
+	jsonData, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("erro ao codificar dados para assinatura: %w", err)
+	}
+
+	hash := sha256.Sum256(jsonData)
+
+	r, s, err := ecdsa.Sign(rand.Reader, privateKey, hash[:])
+	if err != nil {
+		return nil, fmt.Errorf("erro ao assinar dados: %w", err)
+	}
+
+	// Concatena r e s em um único slice de bytes para a assinatura
+	rBytes := r.Bytes()
+	sBytes := s.Bytes()
+
+	// Garante que ambos r e s tenham o mesmo tamanho para facilitar a reconstrução
+	curveBits := privateKey.Curve.Params().BitSize
+	keyBytes := (curveBits + 7) / 8
+
+	signature := make([]byte, 2*keyBytes)
+	copy(signature[keyBytes-len(rBytes):keyBytes], rBytes)
+	copy(signature[2*keyBytes-len(sBytes):], sBytes)
+
+	return signature, nil
+}
+
+// Função para printar a blockchain
+func printBlockchain(blocks []models.Block) {
+	fmt.Println("\n=============================================")
+	fmt.Println("⛓️ VISUALIZAÇÃO DO BLOCKCHAIN ⛓️")
+	fmt.Println("=============================================")
+
+	if len(blocks) == 0 {
+		fmt.Println("O blockchain está vazio.")
+		return
+	}
+
+	for _, block := range blocks {
+		// Ajuste para exibir o Timestamp como tempo legível, se possível, ou apenas o valor int64
+		t := time.Unix(0, block.Timestamp) // Convertendo nano-segundos para time.Time
+		
+		fmt.Printf("--- BLOCO (Criado em: %s) ---\n", t.Format(time.RFC3339)) 
+		fmt.Printf("Hash do Bloco: %x...\n", block.Hash[:10])
+		fmt.Printf("Previous Hash: %x...\n", block.PreviousHash[:10])
+		fmt.Printf("Nonce: %d\n", block.Nonce)
+		fmt.Printf("Número de Transações: %d\n", len(block.Transactions))
+		
+		if len(block.Transactions) > 0 {
+			fmt.Println("  -- Transações --")
+			for i, tx := range block.Transactions {
+				fmt.Printf("  %d) Tipo: %s\n", i+1, tx.Type)
+				// Imprime as informações essenciais da transação
+				fmt.Printf("    Data (Essencial): %v\n", tx.Data)
+				// Imprime as informações usadas para a assinatura/verificação
+				fmt.Printf("    UserData (Assinatura): %v\n", tx.UserData)
+				fmt.Printf("    PublicKey (Bytes): %x...\n", tx.PublicKey[:8])
+				fmt.Println(strings.Repeat("-", 30))
+			}
+		}
+		fmt.Println(strings.Repeat("=", 40))
+	}
+
+	fmt.Println("\nPressione Enter para continuar...")
+	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
