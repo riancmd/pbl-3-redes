@@ -261,8 +261,3 @@ func (c *Client) FindServer(uid string) int {
 	}
 	return c.GetServerID()
 }
-
-// Pega blockchain inicial
-func (c *Client) GetLedger() {
-	return
-}
