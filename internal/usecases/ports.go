@@ -1,6 +1,7 @@
 package usecases
 
 import (
+	"pbl-2-redes/internal/infrastructure/blockchain"
 	"pbl-2-redes/internal/models"
 )
 
@@ -21,7 +22,7 @@ type ClusterSync interface {
 	// Sincroniza nova batalha
 	MatchEnd(string) error
 	// Sincroniza compra de carta
-	BuyBooster(boosterID int) error
+	BuyBooster(transaction models.Transaction) error
 	// Sincroniza troca de carta
 	TradeCard(UID, CID string, card models.Card) error
 	// Sincroniza criação de usuários, para não permitir cópias
@@ -38,4 +39,8 @@ type ClusterSync interface {
 	GetServerID() int
 	// Encontra qual o servidor dono daquele usuário
 	FindServer(UID string) int
+
+	// BLOCKCHAIN
+	// Adiciona na blockchain um incomingBlock
+	AddNewBlock(incomingBlock *blockchain.Block) error
 }

@@ -46,6 +46,7 @@ func main() {
 
 	// Handlers
 	h := handlers.New(useCases)
+	// adicionar o pubsub!!!!!!!!!!!!!!!!
 
 	go h.Listen(port) // Roda na porta especificada
 
@@ -54,6 +55,7 @@ func main() {
 		// Atualização do banco de dados
 		err = useCases.AddCardsFromFile("../../internal/data/cardVault.json", 100000)
 	}
+	//go client.
 
 	if err != nil {
 		panic(err)
