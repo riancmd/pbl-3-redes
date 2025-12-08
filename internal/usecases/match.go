@@ -281,22 +281,33 @@ func (u *UseCases) ManageMatch(match models.Match) {
 }
 
 // HandleUsecard
-func (u *UseCases) HandleUseCard(data json.RawMessage) {
+func (u *UseCases) HandleUseCard(matchID string, data json.RawMessage) error {
+	type cardReq struct {
+		Card models.Card `json:"card"`
+	}
 
+	var req cardReq
+
+	if err := json.Unmarshal(data, &req); err != nil {
+		return err
+	}
+
+	return nil
+	//if !u.
 }
 
 // HandleGiveUp
-func (u *UseCases) HandleGiveUp(data json.RawMessage) {
-
+func (u *UseCases) HandleGiveUp(matchID string, data json.RawMessage) error {
+	return nil
 }
 
 // HandleTimeOut
-func (u *UseCases) HandleTimeout(matchID string) {
-
+func (u *UseCases) HandleTimeout(matchID string) error {
+	return nil
 }
 
 // Atualizar partida
 func (u *UseCases) UpdateMatch(match models.Match) error {
-	u.sync.UpdateMatch(match)
+	//u.sync.UpdateMatch(match)
 	return nil
 }

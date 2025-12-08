@@ -1,6 +1,6 @@
 package usecases
 
-// Retorna estado de saúde
+// Retorna estado próprio de saúde
 func (u *UseCases) CheckHealth() string {
 	return "alive"
 }
