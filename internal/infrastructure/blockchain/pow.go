@@ -9,7 +9,6 @@ import (
 	"log/slog"
 	"math"
 	"math/big"
-	"time"
 )
 
 const targetBits = 24
@@ -72,36 +71,25 @@ func (pow *ProofOfWork) Run(sc *chan int) (n int, h []byte) {
 		// verifica se precisa continuar minerando
 		select {
 		case msg := <-*sc:
-			// se for para minerar
-			if msg == mining {
-				// prepara os dados
-				data := pow.prepareData(nonce)
-				// cria o hash
-				hash = sha256.Sum256(data)
-				//fmt.Printf("\r%x", hash)
-				hashInt.SetBytes(hash[:])
-
-				// faz a comparação
-				if hashInt.Cmp(pow.target) == -1 {
-					break
-				} else {
-					nonce++
-				}
-			}
-			if msg == checkingNode {
-				// resolver essa linha depois
-				time.Sleep(1)
-			}
+			// se for para cancelar
 			if msg == cancel {
-				break
+				return
 			}
-		case <-time.After(1 * time.Second):
-			continue
+		default:
+			// prepara os dados
+			data := pow.prepareData(nonce)
+			// cria o hash
+			hash = sha256.Sum256(data)
+			//fmt.Printf("\r%x", hash)
+			hashInt.SetBytes(hash[:])
+
+			// faz a comparação
+			if hashInt.Cmp(pow.target) == -1 {
+				return nonce, hash[:]
+			} else {
+				nonce++
+			}
 		}
-
-	}
-
-	for nonce < math.MaxInt64 {
 
 	}
 	fmt.Print("\n")

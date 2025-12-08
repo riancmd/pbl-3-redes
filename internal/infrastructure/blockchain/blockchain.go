@@ -1,7 +1,6 @@
 package blockchain
 
 import (
-	"context"
 	"errors"
 	"log/slog"
 	"pbl-2-redes/internal/models"
@@ -14,12 +13,14 @@ type Blockchain struct {
 	Ledger         []*Block
 	MPool          []models.Transaction
 	IncomingBlocks chan BlockTask // possivelmente desnecessário
-	MX             sync.Mutex     // mutex local para quando for mexer na pool
-	blockOK        int            // 0 idle, 1 ok, 2 inválido
+	StateChan      *chan int
+	MX             sync.Mutex // mutex local para quando for mexer na pool
+	blockOK        int        // 0 idle, 1 ok, 2 inválido
 }
 
 func New() *Blockchain {
-	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}, IncomingBlocks: make(chan BlockTask), MX: sync.Mutex{}}
+	channel := make(chan int)
+	return &Blockchain{Height: 1, Ledger: []*Block{Genesis()}, MPool: []models.Transaction{}, IncomingBlocks: make(chan BlockTask), StateChan: &channel, MX: sync.Mutex{}}
 }
 
 func (b *Blockchain) AddTransaction(transaction models.Transaction) error {
@@ -58,7 +59,8 @@ func (b *Blockchain) AddBlock(block *Block) {
 
 func Genesis() *Block {
 	baseTransaction := models.Transaction{Type: models.NONE, Data: []string{}}
-	return NewBlock([]byte{}, []*models.Transaction{&baseTransaction})
+	channel := make(chan int)
+	return NewBlock([]byte{}, []*models.Transaction{&baseTransaction}, &channel)
 }
 
 // Função que atualiza ledger a depender do resultado de comparação de height no cluster
@@ -67,7 +69,7 @@ func (b *Blockchain) UpdateLedger(l []*Block) error {
 		b.Ledger = l
 		return nil
 	}
-	return errors.New("Ledger já atualizado.")
+	return errors.New("ledger já atualizado")
 }
 
 // Função que verifica ilegalidade de transação (uso de recurso já utilizado / transação duplicada sobre mesmo recurso)
@@ -178,8 +180,8 @@ func (b *Blockchain) RunBlockchain() {
 
 	// variável de contexto que controla a mineração
 	// ela serve para comunicar os sinais de cancelamento ou pausa quando for necessário
-	var ctx context.Context
-	var cancelF func()
+	//var ctx context.Context
+	//var cancelF func()
 
 	// estado que guarda o momento atual da blockchain (idle, mining, validating, cancel)
 	state := idle
@@ -198,7 +200,7 @@ func (b *Blockchain) RunBlockchain() {
 			// e tiver menos que 5 e nn tiver minerando
 			// tenta criar bloco
 			if poolLength >= 1 && poolLength < 5 && state == idle {
-				ctx, cancelF = context.WithCancel(context.Background())
+				//ctx, cancelF = context.WithCancel(context.Background())
 				b.MX.Lock()
 				state = mining
 				b.MX.Unlock()
@@ -216,6 +218,7 @@ func (b *Blockchain) RunBlockchain() {
 			if err != nil {
 				incomingTask.OnFinish(err)
 			} else {
+				*b.StateChan <- cancel
 				b.AddBlock(incomingTask.Block)
 				incomingTask.OnFinish(nil)
 			}
@@ -225,7 +228,7 @@ func (b *Blockchain) RunBlockchain() {
 		// caso tenha mais q 5 transações
 		b.MX.Lock()
 		if len(b.MPool) >= 5 && state == idle {
-			ctx, cancelF = context.WithCancel(context.Background())
+			//ctx, cancelF = context.WithCancel(context.Background())
 			b.MX.Lock()
 			state = mining
 			b.MX.Unlock()
