@@ -176,3 +176,13 @@ func (c *Client) AddNewBlock(block *blockchain.Block) error {
 		return errors.New("timeout na validação")
 	}
 }
+
+// Pega blockchain
+func (c *Client) GetLedger() []blockchain.Block {
+	var ledger []blockchain.Block
+
+	for _, t := range c.Blockchain.Ledger {
+		ledger = append(ledger, *(t))
+	}
+	return ledger
+}

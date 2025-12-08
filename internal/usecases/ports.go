@@ -43,4 +43,6 @@ type ClusterSync interface {
 	// BLOCKCHAIN
 	// Adiciona na blockchain um incomingBlock
 	AddNewBlock(incomingBlock *blockchain.Block) error
+	// Pega o ledger
+	GetLedger() []blockchain.Block
 }

@@ -5,6 +5,10 @@ import (
 	"pbl-2-redes/internal/models"
 )
 
+func (u *UseCases) GetBlockchain() []blockchain.Block {
+	return u.sync.GetLedger()
+}
+
 func (u *UseCases) AddNewBlock(newBlock blockchain.Block) error {
 	err := u.sync.AddNewBlock(&newBlock)
 
