@@ -296,9 +296,23 @@ func (u *UseCases) HandleUseCard(matchID string, data json.RawMessage) error {
 	//if !u.
 }
 
-// HandleGiveUp
+// Processa desistência
 func (u *UseCases) HandleGiveUp(matchID string, data json.RawMessage) error {
-	return nil
+	match, err := u.repos.Match.GetMatch(matchID)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("player giving up", "matchID", matchID)
+
+	// Define o estado como finalizado
+	match.State = models.Finished
+
+	// Lógica opcional: Você pode querer definir a sanidade do desistente para 0
+	// para garantir que a lógica de vitória funcione consistentemente,
+	// ou tratar isso no frontend baseado em quem mandou a mensagem.
+
+	return u.sync.UpdateMatch(match)
 }
 
 // HandleTimeOut

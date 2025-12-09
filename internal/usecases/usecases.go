@@ -24,6 +24,7 @@ type UseCases struct {
 	// lá na goroutine de batalha vai ter um case que verifica QUAL o tipo de requisição
 	// de acordo com o tipo
 	inboxes map[string]chan models.MatchMsg
+	outboxes map[string]
 
 	managedMatches map[string]bool
 }
