@@ -6,21 +6,21 @@ import (
 
 // configura o router do gin e as rotas
 func (s *Server) setupRouter() *gin.Engine {
-	// gin.SetMode(gin.ReleaseMode) // em prod a gente descomenta isso pra limpar o log
+	// gin.SetMode(gin.ReleaseMode) 
 	r := gin.Default()
 
-	// rota pra saber se ta vivo e pra eleicao
+	// rota de heartbeating e eleição
 	r.GET("/health", s.handleHealthCheck)
 
-	// --- rotas da blockchain (infra) ---
+	// --- rotas da blockchain ---
 	blockchainGroup := r.Group("/blockchain")
 	{
 		// visualizacao
 		blockchainGroup.GET("/", s.handleGetBlockchain)     // ver o ledger todo
-		blockchainGroup.GET("/mempool", s.handleGetMempool) // ver o que ta pendente
+		blockchainGroup.GET("/mempool", s.handleGetMempool) // ver transações pendentes
 
 		// p2p da blockchain
-		blockchainGroup.POST("/block", s.handleReceiveBlock) // recebe bloco de fora
+		blockchainGroup.POST("/block", s.handleReceiveBlock) // recebe bloco de outro server
 	}
 
 	// --- rotas de sync (lider x seguidores) ---
@@ -28,24 +28,24 @@ func (s *Server) setupRouter() *gin.Engine {
 	// player management
 	playerGroup := r.Group("/players")
 	{
-		// seguidor avisa lider que entrou gente
+		// seguidor avisa lider sobre novos jogadores
 		playerGroup.POST("/connect", s.handleLeaderConnect)
 
-		// lider manda a lista atualizada pra galera
+		// lider manda a lista atualizada para os servers seguidores
 		playerGroup.POST("/update", s.handlePlayerUpdate)
 	}
 
 	// cartas e compras
 	cardGroup := r.Group("/cards")
 	{
-		// seguidor pede pro lider processar compra (vai virar blockchain dps)
+		// seguidor pede para lider processar compra (sincronização de dados do sistema distribuído)
 		cardGroup.POST("/buy", s.handleLeaderBuyCard)
 	}
 
-	// inventario
+	// inventário
 	inventoryGroup := r.Group("/inventory")
 	{
-		// lider avisa mudanca de estoque
+		// líder avisa mudança de estoque
 		inventoryGroup.POST("/update", s.handleInventoryUpdate)
 	}
 
@@ -55,7 +55,7 @@ func (s *Server) setupRouter() *gin.Engine {
 
 	// --- rotas de gameplay p2p (tempo real) ---
 
-	// rotas rapidas pro jogo nao travar esperando bloco
+	// rotas para simplificar batalhas 
 	battleGroup := r.Group("/battle")
 	{
 		battleGroup.POST("/initiate", s.handleBattleInitiate)

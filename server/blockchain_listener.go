@@ -15,7 +15,7 @@ import (
 func (s *Server) RunBlockListener() {
 	color.Cyan("🎧 [Listener] Iniciando monitoramento da Blockchain...")
 
-	// comeca do 1, pulei o genesis
+	// comeca do 1, pulando o genesis
 	lastProcessedHeight := 0
 
 	for {
@@ -35,12 +35,12 @@ func (s *Server) RunBlockListener() {
 			lastProcessedHeight = currentHeight
 		}
 
-		// intervalo pra nao fritar a cpu
+		// espera para não ser muito tudo rápido
 		time.Sleep(1 * time.Second)
 	}
 }
 
-// varre as transacoes do bloco
+// varre as transações do bloco
 func (s *Server) processBlock(block *blockchain.Block) {
 	// color.Blue("⚙️ [Listener] Processando Bloco #%d com %d transações", block.Nonce, len(block.Transactions))
 
@@ -75,13 +75,13 @@ func (s *Server) processPurchase(tx *models.Transaction) {
 	userID := tx.Data[0]
 	boosterJson := tx.Data[1]
 
-	// ve se o usuario ta nesse server pra notificar
+	// vê se o usuário está nesse server pra notificar
 	s.muPlayers.RLock()
 	info, isLocal := s.playerList[userID]
 	s.muPlayers.RUnlock()
 
 	if isLocal {
-		// parse do json pra mandar bonitinho
+		// parse do json pra mandar com formato correto
 		var booster models.Booster
 		json.Unmarshal([]byte(boosterJson), &booster)
 
@@ -133,7 +133,7 @@ func (s *Server) processBattleResult(tx *models.Transaction) {
 
 	winnerID := tx.Data[2]
 
-	// avisa so quem ganhou (opcional)
+	// avisa só quem ganhou 
 	s.muPlayers.RLock()
 	info, ok := s.playerList[winnerID]
 	s.muPlayers.RUnlock()

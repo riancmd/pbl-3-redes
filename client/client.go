@@ -42,7 +42,7 @@ var (
 	indiceCartaOfertada int
 	estadoAtual         int
 
-	// parte de infra e rede
+	// parte de infraestrutura e rede
 	serverAPI          string
 	serverUDP          string
 	serverID           string // id do server onde to conectado
@@ -51,11 +51,11 @@ var (
 	httpClient         *http.Client
 	ctx                = context.Background()
 
-	// pra ficar de olho na latencia
+	// variaváveis para Ping
 	latenciaMedia     int64 // em ms
 	cancelarHeartbeat atomic.Bool
 
-	// coisas de criptografia (pra carteira)
+	// criptografia (assinatura)
 	chavePrivada      *ecdsa.PrivateKey
 	chavePublicaBytes []byte
 )
@@ -79,7 +79,7 @@ func main() {
 	// 2. conecta no cluster redis
 	conectarRedis()
 
-	// 3. faz login no server (aquele aperto de mao inicial)
+	// 3. faz login no server 
 	if !registrarNoServidor() {
 		color.Red("Falha fatal ao registrar no servidor. Encerrando.")
 		return
@@ -99,8 +99,7 @@ func main() {
 	}
 }
 
-// --- parte de criptografia e assinatura (wallet) ---
-
+// função de gerar as chaves para criptografia
 func gerarChaves() {
 	var err error
 	chavePrivada, err = ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -112,13 +111,13 @@ func gerarChaves() {
 	chavePublicaBytes = elliptic.Marshal(elliptic.P256(), chavePrivada.PublicKey.X, chavePrivada.PublicKey.Y)
 }
 
-// cria assinatura digital pra request
+// função de criar assinatura digital pra request
 func assinarRequest(req *models.TransactionRequest) error {
 	// dados que vao ser assinados: payload + timestamp + user + tipo
-	// a ordem TEM que ser a mesma que o server usa pra verificar, senao da ruim
+	// a ordem TEM que ser a mesma que o server usa pra verificar
 	dataToSign := []string{
 		req.Payload,
-		fmt.Sprintf("%d", req.Timestamp), // usa sprintf aqui
+		fmt.Sprintf("%d", req.Timestamp), // transformar em timestamp em string
 		req.UserID,
 		string(req.Type),
 	}
@@ -137,8 +136,7 @@ func assinarRequest(req *models.TransactionRequest) error {
 	return nil
 }
 
-// --- menus e acoes do usuario ---
-
+// função principal de para iniciar o menu do cliente
 func exibirMenu() {
 	color.Yellow("\n--- MENU ---")
 	switch estadoAtual {
@@ -199,8 +197,8 @@ func processarComando(input string, reader *bufio.Reader) {
 	}
 }
 
-// --- acoes da blockchain (comprar, ver etc) ---
 
+// função para comprar booster atualizada para lógica de blockchain
 func comprarBoosterSigned() {
 	color.Yellow("Iniciando transação de compra...")
 
@@ -222,7 +220,7 @@ func comprarBoosterSigned() {
 		return
 	}
 
-	// 4. manda ver
+	// 4. manda para o cluster de servidores
 	url := fmt.Sprintf("http://%s/cards/buy", serverAPI)
 	body, _ := json.Marshal(req)
 	resp, err := httpClient.Post(url, "application/json", strings.NewReader(string(body)))
@@ -234,12 +232,13 @@ func comprarBoosterSigned() {
 
 	if resp.StatusCode == http.StatusAccepted {
 		color.Green("✅ Transação enviada para a Mempool! Aguardando mineração...")
-		// nao bloqueia o usuario, deixa ele fazer outras coisas enquanto espera a mineracao
+		// nao bloqueia o usuario
 	} else {
 		color.Red("Erro na compra: Status %d", resp.StatusCode)
 	}
 }
 
+// função para ber o ledger
 func verBlockchain() {
 	url := fmt.Sprintf("http://%s/blockchain/", serverAPI)
 	resp, err := httpClient.Get(url)
@@ -258,6 +257,7 @@ func verBlockchain() {
 	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
+// função auxiliar para ver a mempool
 func verMempool() {
 	url := fmt.Sprintf("http://%s/blockchain/mempool", serverAPI)
 	resp, err := httpClient.Get(url)
@@ -275,8 +275,7 @@ func verMempool() {
 	bufio.NewReader(os.Stdin).ReadString('\n')
 }
 
-// --- listener do redis (pra ouvir o servidor) ---
-
+// função para começar a ouvir respostas do server
 func listenRedis() {
 	pubsub := redisClient.Subscribe(ctx, canalRedisResposta)
 	defer pubsub.Close()
@@ -293,7 +292,7 @@ func listenRedis() {
 
 		tipo := envelope["tipo"].(string)
 
-		// gambiarra pra converter payload de volta pra json e depois pra struct
+		// converte payload para json e depois para struct
 		payloadBytes, _ := json.Marshal(envelope["payload"])
 
 		switch tipo {
@@ -322,15 +321,12 @@ func listenRedis() {
 			}
 			json.Unmarshal(payloadBytes, &dados)
 			color.Green("\n🤝 [BLOCKCHAIN] %s (Tx: %s)", dados.Msg, dados.TxID)
-			// logica de tirar/add carta deveria ser local ou sync
-			// simplificando: server ja atualizou la, aqui so recebe o aviso
 			estadoAtual = EstadoLivre
 			exibirMenu()
 
 		case "Rank_Update":
 			color.Yellow("\n🏆 [BLOCKCHAIN] Vitória registrada no ledger!")
 
-		// parte de gameplay (mantive igual)
 		case "Inicio_Batalha":
 			var p models.RespostaInicioBatalha
 			json.Unmarshal(payloadBytes, &p)
@@ -350,16 +346,11 @@ func listenRedis() {
 	}
 }
 
-// --- logica da batalha (adaptada pra blockchain) ---
 
-// loop de batalha simplificado pra esse exemplo
 func loopBatalha() {
-	// quando acabar, chama o registro na blockchain
-
-	// simulacao simples
+	
 	fmt.Println("Iniciando batalha")
 	time.Sleep(2 * time.Second)
-	// se ganhou:
 	registrarResultadoBatalha(idBatalha, idPessoal)
 	estadoAtual = EstadoPareado
 }
@@ -385,8 +376,8 @@ func registrarResultadoBatalha(battleID, winnerID string) {
 	fmt.Println("Resultado enviado para Blockchain.")
 }
 
-// --- funcoes auxiliares e infra ---
 
+// função auxiliar para ver inventário
 func verCartas() {
 	color.Cyan("Suas Cartas:")
 	if len(minhasCartas) == 0 {
@@ -403,13 +394,11 @@ func registrarNoServidor() bool {
 	// tenta conectar na api definida no serverAPI
 	url := fmt.Sprintf("http://%s/players/connect", serverAPI)
 
-	// se falhar, tenta descobrir pela variavel de ambiente (failover simples)
-	// ... (implementacao simplificada)
 
 	req := models.LeaderConnectRequest{
 		PlayerID:     idPessoal,
-		ServerID:     "client_node", // irrelevante aqui pro client
-		ServerHost:   "client_ip",   // irrelevante
+		ServerID:     "client_node",
+		ServerHost:   "client_ip",
 		ReplyChannel: canalRedisResposta,
 	}
 	body, _ := json.Marshal(req)
@@ -428,10 +417,11 @@ func registrarNoServidor() bool {
 	}
 
 	color.Green("Conectado ao servidor %s com sucesso!", serverAPI)
-	serverUDP = strings.Split(serverAPI, ":")[0] + ":8083" // assume porta udp padrao
+	serverUDP = strings.Split(serverAPI, ":")[0] + ":8083"
 	return true
 }
 
+// função auxiliar para pegar informações do server definidas no docker-compose.yml
 func lerVariaveisAmbiente() {
 	serverAPI = os.Getenv("SERVER_API")
 	if serverAPI == "" {
@@ -463,7 +453,7 @@ func conectarRedis() {
 }
 
 func monitorarLatencia() {
-	// mantido do original (ping udp)
+
 	for {
 		if cancelarHeartbeat.Load() {
 			time.Sleep(1 * time.Second)
@@ -490,10 +480,10 @@ func monitorarLatencia() {
 	}
 }
 
-// stubs pras funcoes de gameplay p2p
-// devem seguir a mesma logica do original, mandando json
+// funcoes de gameplay p2p, seguindo a lógica anterior de uso de json
 func parear(id string) { idParceiro = id; estadoAtual = EstadoPareado; fmt.Println("Pareado com", id) }
 func desparear()       { idParceiro = ""; estadoAtual = EstadoLivre; fmt.Println("Despareado") }
+
 func solicitarBatalha() {
 	url := fmt.Sprintf("http://%s/battle/initiate", serverAPI)
 	req := models.BattleInitiateRequest{IdBatalha: uuid.New().String(), IdJogadorLocal: idPessoal, IdOponente: idParceiro, HostServidor: serverAPI}
@@ -502,11 +492,13 @@ func solicitarBatalha() {
 	fmt.Println("Solicitação de batalha enviada...")
 }
 func solicitarTroca() {
-	// mesma logica, endpoint de troca
+	url := fmt.Sprintf("http://%s/trade/initiate", serverAPI)
+	req := models.BattleInitiateRequest{IdBatalha: uuid.New().String(), IdJogadorLocal: idPessoal, IdOponente: idParceiro, HostServidor: serverAPI}
+	body, _ := json.Marshal(req)
+	httpClient.Post(url, "application/json", strings.NewReader(string(body)))
 	fmt.Println("Solicitação de troca enviada...")
 }
 func loopTroca() {
-	// implementacao parecida com o loop de batalha
 	time.Sleep(2 * time.Second)
 	estadoAtual = EstadoPareado
 }

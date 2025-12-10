@@ -10,7 +10,7 @@ import (
 )
 
 // retorna a chain inteira (ledger)
-// usado pelo cliente pra "ver a blockchain" e novos nodes sincronizarem
+// usado pelo cliente pra ver a blockchain e novos nodes sincronizarem
 func (s *Server) handleGetBlockchain(c *gin.Context) {
 	s.Blockchain.MX.Lock()
 	defer s.Blockchain.MX.Unlock()
@@ -21,7 +21,7 @@ func (s *Server) handleGetBlockchain(c *gin.Context) {
 	})
 }
 
-// retorna o que ta pendente na mempool
+// retorna o que está pendente na mempool
 func (s *Server) handleGetMempool(c *gin.Context) {
 	s.Blockchain.MX.Lock()
 	defer s.Blockchain.MX.Unlock()
@@ -43,7 +43,7 @@ func (s *Server) handleReceiveBlock(c *gin.Context) {
 
 	color.Cyan("📦 [Blockchain] Recebido bloco de outro nó. Hash: %x...", block.Hash[:4])
 
-	// canal pra pegar o resultado da validacao
+	// canal pra pegar o resultado da validação
 	resultChan := make(chan error, 1)
 
 	// cria a task pro loop principal processar
@@ -54,7 +54,7 @@ func (s *Server) handleReceiveBlock(c *gin.Context) {
 		},
 	}
 
-	// manda pro canal de entrada (non blocking se tiver cheio)
+	// manda para o canal de entrada (non blocking se tiver cheio)
 	select {
 	case s.Blockchain.IncomingBlocks <- task:
 		// espera processar

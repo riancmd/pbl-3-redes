@@ -11,7 +11,7 @@ import (
 	"math/big"
 )
 
-// verifica se a assinatura da transacao bate com a chave publica enviada
+// verifica se a assinatura da transação bate com a chave publica enviada
 func VerifySignature(publicKeyBytes []byte, UserData []string, signature []byte) bool {
 	jsonData, err := json.Marshal(UserData)
 
@@ -30,7 +30,7 @@ func VerifySignature(publicKeyBytes []byte, UserData []string, signature []byte)
 		return false
 	}
 
-	// monta a chave publica struct
+	// monta a chave pública struct
 	publicKey := ecdsa.PublicKey{Curve: curve, X: x, Y: y}
 
 	// separa o R e o S da assinatura
@@ -48,7 +48,7 @@ func VerifySignature(publicKeyBytes []byte, UserData []string, signature []byte)
 // valida o request que vem direto do client (antes de virar tx)
 func VerifyTransactionRequestSignature(req models.TransactionRequest) bool {
 	// IMPORTANTE: a ordem aqui tem que ser EXATAMENTE a mesma que o cliente usou pra assinar
-	// senao o hash sai diferente e a verificacao falha
+	// se não o hash sai diferente e a verificação falha
 	dataToVerify := []string{
 		req.Payload,
 		fmt.Sprintf("%d", req.Timestamp), // timestamp como string
@@ -73,7 +73,7 @@ func VerifyTransactionRequestSignature(req models.TransactionRequest) bool {
 	// gera hash
 	hash := sha256.Sum256(jsonData)
 
-	// chama a validacao interna
+	// chama a validação interna
 	valid := verifyECDSA(req.PublicKey, req.Signature, hash[:])
 
 	if !valid {

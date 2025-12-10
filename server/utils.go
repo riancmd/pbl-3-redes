@@ -12,7 +12,7 @@ import (
 	"github.com/fatih/color"
 )
 
-// manda msg pro canal do user no redis
+// manda resposta pro canal do jogador no redis
 func (s *Server) sendToClient(canal string, tipo string, payload interface{}) {
 	msg := map[string]interface{}{
 		"tipo":    tipo,
@@ -48,10 +48,9 @@ func (s *Server) sendToHost(host string, endpoint string, payload interface{}) e
 	return nil
 }
 
-// espalha a msg pra todo mundo que ta vivo
+// broadcast de mensangens
 func (s *Server) broadcastToServers(endpoint string, payload interface{}) {
 	s.muLiveServers.RLock()
-	// copia a lista pra nao travar o mutex por muito tempo
 	targets := make([]string, 0)
 	for id, alive := range s.liveServers {
 		if alive && id != s.ID {
@@ -69,7 +68,7 @@ func (s *Server) broadcastToServers(endpoint string, payload interface{}) {
 	}
 }
 
-// responde o ping udp basico
+// função auxilicar para o Ping
 func (s *Server) lidarPing(conn *net.UDPConn) {
 	buffer := make([]byte, 1024)
 	for {

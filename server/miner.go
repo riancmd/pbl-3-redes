@@ -6,28 +6,27 @@ import (
 	"github.com/fatih/color"
 )
 
-// loop eterno tentando achar bloco, tem que rodar em background no main
+// loop eterno tentando achar bloco, rodando como goroutine na main
 func (s *Server) RunMiner() {
 	color.Cyan("⛏️  [Miner] Iniciando minerador...")
 
-	// da um tempo pro sistema subir
 	time.Sleep(5 * time.Second)
 
 	for {
-		// 1. tem coisa na mempool?
+		// 1. verifica mempool
 		s.Blockchain.MX.Lock()
 		mempoolSize := len(s.Blockchain.MPool)
 		s.Blockchain.MX.Unlock()
 
 		if mempoolSize == 0 {
-			// nada pra fazer, dorme um pouco
+			// nenhuma transação pendente
 			time.Sleep(2 * time.Second)
 			continue
 		}
 
 		color.Yellow("⛏️  [Miner] Minerando bloco com %d transações...", mempoolSize)
 
-		// 2. tenta resolver o puzzle
+		// 2. tenta resolver o desafio 
 		newBlock, err := s.Blockchain.MineBlock()
 
 		if err != nil {
@@ -40,14 +39,14 @@ func (s *Server) RunMiner() {
 			continue
 		}
 
-		// 3. achamos! salva no local
+		// 3. mineração bem sucedida
 		s.Blockchain.AddBlock(newBlock)
 		color.Green("✅ [Miner] Bloco #%d minerado com sucesso!", s.Blockchain.Height-1)
 
-		// 4. conta pra todo mundo
+		// 4. broadcast do bloco minerado
 		go s.broadcastBlock(newBlock)
 
-		// 5. respira antes do proximo
+		// 5. espera antes de poder minerar de novo
 		time.Sleep(500 * time.Millisecond)
 	}
 }

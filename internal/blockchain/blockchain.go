@@ -43,7 +43,7 @@ func (b *Blockchain) AddTransaction(tx models.Transaction) error {
 		return errors.New("invalid signature")
 	}
 
-	// 2. anti-replay (vê se o cara nao ta mandando de novo a mesma coisa)
+	// 2. anti-replay (ver se está sendo mandado a mesma coisa)
 	if !b.AntiReplay(tx.ID) {
 		slog.Error("Blockchain: Transação duplicada (Replay Attack)", "txID", tx.ID)
 		return errors.New("duplicated transaction")
@@ -64,7 +64,7 @@ func (b *Blockchain) AddTransaction(tx models.Transaction) error {
 // pega txs da mempool e tenta fechar um bloco
 func (b *Blockchain) MineBlock() (*Block, error) {
 	b.MX.Lock()
-	// pega o que tem pendente (limitei a 50 pra nao ficar gigante)
+	// pega o que tem pendente
 	count := len(b.MPool)
 	if count == 0 {
 		b.MX.Unlock()
@@ -76,19 +76,18 @@ func (b *Blockchain) MineBlock() (*Block, error) {
 
 	txsToMine := make([]*models.Transaction, count)
 	for i := 0; i < count; i++ {
-		// cuidado com ponteiro em loop, mas aqui ta acessando por indice entao de boa
 		tx := b.MPool[i]
 		txsToMine[i] = &tx
 	}
 
 	prevHash := b.Ledger[len(b.Ledger)-1].Hash
-	b.MX.Unlock() // libera o lock pq o pow demora
+	b.MX.Unlock() // libera o lock devido demora do pow
 
 	// comeca a mineracao
-	// passamos o StateChan pra poder cancelar se chegar bloco de outro no
+	// passamos o StateChan pra poder cancelar se chegar bloco de outro nó
 	newBlock := NewBlock(prevHash, txsToMine, b.StateChan)
 
-	// se o hash for vazio, eh sinal que cancelaram
+	// se o hash for vazio, é sinal que cancelaram
 	if len(newBlock.Hash) == 0 {
 		return nil, errors.New("mining cancelled")
 	}
@@ -106,13 +105,13 @@ func (b *Blockchain) AddBlock(block *Block) {
 	b.Height++
 
 	// remove da mempool as txs que entraram nesse bloco
-	// cria mapa pra busca rapida
+	// cria mapa para busca rapida
 	minedIDs := make(map[string]bool)
 	for _, tx := range block.Transactions {
 		minedIDs[tx.ID] = true
 	}
 
-	// recria a mpool so com o que sobrou
+	// recria a mpool só com o que sobrou
 	newPool := []models.Transaction{}
 	for _, tx := range b.MPool {
 		if !minedIDs[tx.ID] {
@@ -124,7 +123,7 @@ func (b *Blockchain) AddBlock(block *Block) {
 	fmt.Printf("⛓️  Bloco #%d adicionado! Hash: %x | Txs: %d\n", b.Height, block.Hash[:4], len(block.Transactions))
 }
 
-// verifica se o bloco que chegou de outro no eh valido
+// verifica se o bloco que chegou de outro nó é válido
 func (b *Blockchain) CheckNewBlock(block *Block) error {
 	// 1. verifica se encaixa no hash anterior
 	// aqui que entra o consenso de nakamoto sobre a cadeia mais longa (height)
@@ -174,7 +173,7 @@ func (b *Blockchain) AntiReplay(txID string) bool {
 	return true
 }
 
-// checa se os dados batem com o tipo de transacao
+// checa se os dados batem com o tipo de transação
 func (b *Blockchain) ValidateFormat(tx models.Transaction) error {
 	var requiredLen int
 	switch tx.Type {
@@ -200,7 +199,7 @@ func (b *Blockchain) RunBlockchainLoop() {
 		select {
 		case task := <-b.IncomingBlocks:
 			// chegou bloco novo da rede
-			*b.StateChan <- 3 // manda sinal de CANCEL pra quem tiver minerando agora
+			*b.StateChan <- 3 // manda sinal de CANCEL para quem tiver minerando agora
 
 			err := b.CheckNewBlock(task.Block)
 			if err != nil {

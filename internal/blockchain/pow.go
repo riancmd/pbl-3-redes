@@ -10,8 +10,8 @@ import (
 	"strconv"
 )
 
-// dificuldade do pow (quanto maior, mais foda de achar)
-const targetBits = 20 // deixei baixo pra testar rapido, em prod sobe pra uns 24
+// dificuldade do pow (quanto maior, mais difícil de achar)
+const targetBits = 20 // deixei baixo pra testar rápido, em prod sobe pra uns 24
 
 // constantes pra controlar o estado da mineracao
 const (
@@ -74,19 +74,19 @@ func (pow *ProofOfWork) Run(sc *chan int) (int, []byte) {
 	//fmt.Printf("Minerando bloco...\n")
 
 	for nonce < math.MaxInt64 {
-		// verifica se mandaram parar (tipo, se alguem minerou antes)
+		// verifica se mandaram parar (ex, se alguem minerou antes)
 		select {
 		case msg := <-*sc:
 			if msg == Cancel {
 				return nonce, []byte{}
 			}
 		default:
-			// segue o baile minerando
+			// permanece minerando
 			data := pow.prepareData(nonce)
 			hash = sha256.Sum256(data)
 			hashInt.SetBytes(hash[:])
 
-			// se o hash for menor que o target, achamos!
+			// se o hash for menor que o target, achamos
 			if hashInt.Cmp(pow.target) == -1 {
 				//fmt.Printf("\rMinerado! Hash: %x\n", hash)
 				return nonce, hash[:]
@@ -98,7 +98,7 @@ func (pow *ProofOfWork) Run(sc *chan int) (int, []byte) {
 	return nonce, []byte{}
 }
 
-// valida se o pow ta certo (essa parte eh rapida)
+// valida se o pow ta correto
 func (pow *ProofOfWork) Validate() bool {
 	var hashInt big.Int
 

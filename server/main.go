@@ -48,18 +48,18 @@ type Server struct {
 	redisClient *redis.ClusterClient
 	ctx         context.Context
 
-	// controle de lideranca e cluster
+	// controle de liderança e cluster
 	currentLeader string
 	serverList    map[string]string // id -> host api
-	liveServers   map[string]bool   // quem ta vivo
+	liveServers   map[string]bool   // quem está vivo
 	muLeader      sync.RWMutex
 	muLiveServers sync.RWMutex
 
-	// memoria do jogo
+	// memória do jogo
 	playerList map[string]models.PlayerInfo // lista de players online
 	muPlayers  sync.RWMutex
 
-	batalhas   map[string]*models.Batalha // batalhas rolando (so no host)
+	batalhas   map[string]*models.Batalha // batalhas rolando (apenas no host)
 	muBatalhas sync.Mutex
 
 	trades   map[string]*models.Troca // trocas rolando
@@ -76,11 +76,11 @@ type Server struct {
 	ginEngine *gin.Engine
 }
 
-// info basica de onde o player ta
+// info básica de onde o player está (qual servidor)
 type PlayerInfo struct {
 	ServerID     string
 	ServerHost   string
-	ReplyChannel string // canal do redis pra falar com ele
+	ReplyChannel string // canal do redis para comunicar
 }
 
 func main() {
@@ -103,7 +103,6 @@ func main() {
 	ctx := context.Background()
 	if err := rdb.Ping(ctx).Err(); err != nil {
 		color.Red("Falha ao conectar no Redis: %v", err)
-		// em prod daria panic, aqui a gente segue na fe
 	} else {
 		color.Green("Conectado ao Redis Cluster!")
 	}
@@ -125,7 +124,7 @@ func main() {
 	// 4. sobe o DB de cartas e blockchain
 	cd := cardDB.New()
 
-	// carrega o json (tem que estar na raiz do workdir)
+	// carrega o json 
 	color.Cyan("Carregando banco de dados de cartas...")
 	definitions, err := cd.InitializeCardsFromJSON("cardVault.json")
 	var generatedBoosters []models.Booster
@@ -165,7 +164,7 @@ func main() {
 		tradesPeer:   make(map[string]models.PeerTradeInfo),
 	}
 
-	// 5. solta as goroutines em background
+	// 5. goroutines rodando paralelamente
 
 	// A) loop da blockchain (processa blocos que chegam)
 	go s.Blockchain.RunBlockchainLoop()
@@ -174,7 +173,7 @@ func main() {
 	go s.listenRedisGlobal(TopicoConectar)
 	go s.listenRedisGlobal(TopicoComprarCarta)
 
-	// C) sobe udp
+	// C) ping UDP
 	go s.RunUDP(udpPort)
 
 	// D) sobe api rest
@@ -185,7 +184,7 @@ func main() {
 	go s.RunBlockListener()
 	go s.RunMiner()
 
-	// 6. logs pra gente saber onde ta rodando
+	// 6. logs 
 	externalPort := os.Getenv("EXTERNAL_PORT")
 	if externalPort == "" {
 		externalPort = apiPort
@@ -201,18 +200,18 @@ func main() {
 	color.White("Servidores:     %v", s.serverList)
 	color.Cyan("===========================================")
 
-	// 7. espera sinal manual pra comecar a brincadeira (eleicao)
+	// 7. espera sinal manual (ENTER) para eleição
 	color.Yellow("\nPressione ENTER para iniciar Health Checks e Eleição...")
 	bufio.NewReader(os.Stdin).ReadString('\n')
 
-	// 8. comeca a pingar os amiguinhos
+	// 8. heartbeating
 	go s.RunHealthChecks()
 
-	// 9. da um tempo pra descobrir quem ta vivo
+	// 9. espera para detectar servers ativos
 	color.Yellow("Aguardando descoberta de nós (3s)...")
 	time.Sleep(3 * time.Second)
 
-	// 10. mostra quem achou
+	// 10. mostrar servers conectados e vivos
 	s.muLiveServers.RLock()
 	color.Green("Nós vivos detectados: %d", len(s.liveServers))
 	for id, alive := range s.liveServers {
@@ -222,11 +221,10 @@ func main() {
 	}
 	s.muLiveServers.RUnlock()
 
-	// 11. bora votar
+	// 11. votação do líder
 	color.Yellow("\nIniciando eleição de líder...")
 	s.electNewLeader(nil)
 
-	// 12. segura a execucao
 	select {}
 }
 

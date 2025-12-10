@@ -32,7 +32,7 @@ type Booster struct {
 
 // estruturas pra controlar estado na memoria do servidor
 
-// guarda onde o player ta conectado
+// guarda onde o player está conectado
 type PlayerInfo struct {
 	ServerID     string `json:"server_id"`
 	ServerHost   string `json:"server_host"`
@@ -65,14 +65,14 @@ type Troca struct {
 	CanalJ2    chan interface{} `json:"-"`
 }
 
-// o S2 usa isso pra saber onde ta rolando a batalha
+// o S2 usa isso para sabe onde está a batalha
 type PeerBattleInfo struct {
 	BattleID string
 	HostAPI  string
 	PlayerID string
 }
 
-// o S2 usa isso pra saber onde ta o host da troca
+// o S2 usa isso para saber onde está o host de troca
 type PeerTradeInfo struct {
 	HostAPI  string
 	PlayerID string
@@ -152,7 +152,7 @@ type TradeResultRequest struct {
 	CartaRecebida Tanque `json:"carta_recebida"`
 }
 
-// requests pro redis (coisa velha de compatibilidade)
+// requests pro redis 
 type ReqConectar struct {
 	PlayerID string `json:"player_id"`
 }
@@ -160,7 +160,7 @@ type ReqComprarCarta struct {
 	PlayerID string `json:"player_id"`
 }
 
-// parte da blockchain e transacoes
+// parte da blockchain e transações
 
 type TransactionType string
 

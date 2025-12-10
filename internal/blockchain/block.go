@@ -35,7 +35,7 @@ func NewBlock(prevHash []byte, t []*models.Transaction, StateChan *chan int) *Bl
 	// roda a mineração (fica travado aqui ate achar ou cancelarem pelo canal)
 	nonce, hash := pow.Run(StateChan)
 
-	// se o hash vier vazio eh pq cancelaram (tipo, outro node achou antes)
+	// se o hash vier vazio é porque cancelaram (ex, outro node achou antes)
 	block.Hash = hash
 	block.Nonce = nonce
 
@@ -61,7 +61,7 @@ func Genesis() *Block {
 	}
 }
 
-// helpers pra converter hash pra string (facilita debug)
+// helpers pra converter hash pra string
 func (b *Block) HashHex() string {
 	return hex.EncodeToString(b.Hash)
 }

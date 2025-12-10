@@ -19,11 +19,10 @@ func (s *Server) listenRedisGlobal(topico string) {
 			continue
 		}
 
-		// legado pra compatibilidade, se precisar processar msg velha
+		
 		if topico == TopicoConectar {
 			var req models.ReqConectar
 			json.Unmarshal([]byte(msg.Payload), &req)
-			// logica extra viria aqui
 		}
 	}
 }

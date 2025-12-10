@@ -14,7 +14,7 @@ import (
 const CARDS_PER_BOOSTER = 3
 
 type CardDB struct {
-	// cachezinho pra guardar o que leu do json
+	// usado para guardar o que leu do json
 	definitions map[string]models.CardData
 }
 
@@ -24,14 +24,14 @@ func New() *CardDB {
 	}
 }
 
-// le o json com os status base dos tanques
+// lê o json com os status base dos tanques
 func (cd *CardDB) InitializeCardsFromJSON(filename string) (map[string]models.CardData, error) {
 	file, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, errors.New("reading file error: " + err.Error())
 	}
 
-	// wrapper so pra bater com o formato do json {"cards": { "key": { ... } }}
+	// wrapper para ficar compatível com o formato do json {"cards": { "key": { ... } }}
 	type JsonWrapper struct {
 		Cards map[string]models.CardData `json:"cards"`
 	}
@@ -46,7 +46,7 @@ func (cd *CardDB) InitializeCardsFromJSON(filename string) (map[string]models.Ca
 	return wrapper.Cards, nil
 }
 
-// calcula quantas copias de cada carta vai ter no total, baseado na raridade (50/40/10)
+// calcula quantas cópias de cada carta vai ter no total, baseado na raridade (50/40/10)
 func (cd *CardDB) CalculateCardCopies(glossary map[string]models.CardData, totalBoosters int) map[string]int {
 	totalCards := totalBoosters * CARDS_PER_BOOSTER
 	copies := make(map[string]int)
@@ -66,7 +66,7 @@ func (cd *CardDB) CalculateCardCopies(glossary map[string]models.CardData, total
 		}
 	}
 
-	// contas de padaria pra saber os totais
+	// contas para saber os totais
 	countCommon := int(float64(totalCards) * 0.50)
 	countUncommon := int(float64(totalCards) * 0.40)
 	countRare := int(float64(totalCards) * 0.10)
@@ -91,7 +91,7 @@ func (cd *CardDB) CalculateCardCopies(glossary map[string]models.CardData, total
 	return copies
 }
 
-// cria as instancias reais dos tanques, com uuids unicos pra blockchain
+// cria as instâncias reais dos tanques, com uuids unicos pra blockchain
 func (cd *CardDB) CreateCardPool(glossary map[string]models.CardData, copies map[string]int) []models.Tanque {
 	var pool []models.Tanque
 
@@ -117,12 +117,12 @@ func (cd *CardDB) CreateCardPool(glossary map[string]models.CardData, copies map
 	return pool
 }
 
-// embaralha tudo e monta os pacotinhos
+// embaralha tudo e monta os pacotes
 func (cd *CardDB) CreateBoosters(cardPool []models.Tanque) []models.Booster {
-	// usa rand local pra nao dar ruim com concorrencia
+	// usa rand local para não ter problema em concorrência
 	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// mistura
+	// mistura a ordem
 	r.Shuffle(len(cardPool), func(i, j int) {
 		cardPool[i], cardPool[j] = cardPool[j], cardPool[i]
 	})

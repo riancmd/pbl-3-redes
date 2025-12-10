@@ -10,9 +10,8 @@ import (
 	"github.com/fatih/color"
 )
 
-// fica pingando os outros pra ver quem ta vivo
+// hearbeating para verifificar quais outros servers estão ativos
 func (s *Server) RunHealthChecks() {
-	// espera estabilizar antes de sair atirando
 	time.Sleep(5 * time.Second)
 
 	ticker := time.NewTicker(HealthCheckInterval)
@@ -24,7 +23,7 @@ func (s *Server) RunHealthChecks() {
 }
 
 func (s *Server) checkClusterHealth() {
-	// lista temporaria pra saber quem respondeu agora
+	// lista temporaria para guardar quem respondeu no momento
 	liveNow := make(map[string]bool)
 	var wg sync.WaitGroup
 	var mu sync.Mutex
@@ -43,8 +42,7 @@ func (s *Server) checkClusterHealth() {
 	}
 	wg.Wait()
 
-	// --- DIFERENCA DO ANTIGO ---
-	// garante que EU to vivo pra mim mesmo, senao da ruim na votacao
+
 	mu.Lock()
 	liveNow[s.ID] = true
 	mu.Unlock()
@@ -55,12 +53,12 @@ func (s *Server) checkClusterHealth() {
 	s.liveServers = liveNow
 	s.muLiveServers.Unlock()
 
-	// ve se o lider morreu
+	// verifica se o líder caiu
 	s.muLeader.RLock()
 	leader := s.currentLeader
 	s.muLeader.RUnlock()
 
-	// se o lider sumiu, faz eleicao nova
+	// se o lider sumiu, faz eleição nova
 	if leader != "" && !liveNow[leader] {
 		color.Red("🚨 [Cluster] Líder %s caiu! Iniciando nova eleição...", leader)
 		// debug:
@@ -90,7 +88,7 @@ func (s *Server) checkServerHealth(host string) bool {
 	return resp.StatusCode == http.StatusOK
 }
 
-// elege o lider novo baseado em quem ta vivo
+// elege o lider novo baseado em quem está vivo
 func (s *Server) electNewLeader(liveNow map[string]bool) {
 	color.Yellow("\n[Eleição] Iniciando processo de eleição...")
 

@@ -15,7 +15,7 @@ import (
 
 // handlers da api rest com gin
 
-// handleHealthCheck: so pra saber se o servidor ta de pe
+// handleHealthCheck: heartbeating
 func (s *Server) handleHealthCheck(c *gin.Context) {
 	c.JSON(http.StatusOK, models.HealthCheckResponse{
 		Status:   "OK",
@@ -26,7 +26,7 @@ func (s *Server) handleHealthCheck(c *gin.Context) {
 
 // parte de sincronizacao do cluster
 
-// avisa pro lider que um player novo conectou
+// avisa para o lider que um player novo conectou
 func (s *Server) handleLeaderConnect(c *gin.Context) {
 	if !s.isLeader() {
 		c.JSON(http.StatusForbidden, gin.H{"error": "Eu não sou o líder"})
@@ -49,10 +49,10 @@ func (s *Server) handleLeaderConnect(c *gin.Context) {
 	}
 	s.muPlayers.Unlock()
 
-	// loga so se for novidade ou troca de server
+	// loga apenas se for novidade ou troca de server
 	if !exists || oldInfo.ServerID != req.ServerID {
 		color.Green("LÍDER: Player %s registrado no servidor %s", req.PlayerID, req.ServerID)
-		// propaga pros outros servers ficarem sabendo
+		// propaga para os outros servers
 		go s.broadcastToServers("/players/update", s.playerList)
 	}
 
@@ -71,9 +71,8 @@ func (s *Server) handlePlayerUpdate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "updated"})
 }
 
-// recebe atualizacao de estoque (futuro)
+// recebe atualizacao de estoque (feature cancelada)
 func (s *Server) handleInventoryUpdate(c *gin.Context) {
-	// implementacao futura pra consistencia eventual do estoque visual
 	c.JSON(http.StatusOK, gin.H{"status": "updated"})
 }
 
@@ -96,7 +95,7 @@ func (s *Server) handleLeaderBuyCard(c *gin.Context) {
 	}
 
 	// 2. ve se tem booster no estoque
-	s.muTrades.Lock() // usando muTrades ou criar um muInventory especifico
+	s.muTrades.Lock()
 	if len(s.Boosters) == 0 {
 		s.muTrades.Unlock()
 		c.JSON(http.StatusGone, gin.H{"error": "Estoque esgotado"})
@@ -108,16 +107,10 @@ func (s *Server) handleLeaderBuyCard(c *gin.Context) {
 	s.muTrades.Unlock()
 
 	// 3. prepara os dados da transacao
-	// simplificacao: vamos registrar apenas a PRIMEIRA carta do booster no Data para o indice,
-	// ou serializar as cartas no campo Data?
-	// o modelo diz: [0]UserID, [1]CardID_Gerado, [2]CardModel
-	// como o booster tem 3 cartas, vamos criar uma transacao que representa o PACOTE
-	// ou criar 3 transacoes? pra simplificar e economizar blocos, vamos serializar o booster no Data[1]
 
-	// adaptacao: guarda o json do booster direto no data pra facilitar pro cliente pegar depois
 	boosterJson, _ := json.Marshal(booster)
 
-	// monta a transacao pra blockchain
+	// monta a transação pra blockchain
 	tx := models.Transaction{
 		ID:        uuid.New().String(),
 		Type:      models.TxPurchase,
@@ -136,13 +129,12 @@ func (s *Server) handleLeaderBuyCard(c *gin.Context) {
 	if err := s.Blockchain.AddTransaction(tx); err != nil {
 		color.Red("COMPRA: Erro ao adicionar na Mempool: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		// deveria devolver o booster pro estoque aqui se der erro, mas ignora por enquanto
 		return
 	}
 
 	color.Green("COMPRA: Transação %s enviada para Mempool (User: %s)", tx.ID, req.UserID)
 
-	// 5. avisa o cliente que ta processando
+	// 5. avisa o cliente que está sendo processado
 	c.JSON(http.StatusAccepted, models.AsyncResponse{
 		Message: "Transação de compra enviada para processamento",
 		TxID:    tx.ID,
@@ -171,9 +163,7 @@ func (s *Server) handleRegisterBattle(c *gin.Context) {
 		return
 	}
 
-	// 2. valida se a batalha rolou mesmo (confiando na assinatura por enquanto)
-	// pra ser mais seguro o server deveria ter o registro, mas como limpamos da memoria no fim,
-	// vamos confiar na criptografia do vencedor
+	// 2. valida se a batalha rolou mesmo (confiando na assinatura do jogador vencedor)
 
 	// monta transacao BR
 	tx := models.Transaction{
@@ -252,7 +242,7 @@ func (s *Server) handleRegisterTrade(c *gin.Context) {
 	})
 }
 
-// handlers de gameplay p2p (mantido do original)
+// handlers de gameplay p2p
 
 // handleBattleInitiate: S1 (Host) -> S2 (Peer)
 func (s *Server) handleBattleInitiate(c *gin.Context) {
@@ -262,7 +252,7 @@ func (s *Server) handleBattleInitiate(c *gin.Context) {
 		return
 	}
 
-	// registra quem eh o host e quem eh o peer
+	// registra quem é o host e quem é o peer
 	s.muBatalhasPeer.Lock()
 	s.batalhasPeer[req.IdBatalha] = models.PeerBattleInfo{
 		HostAPI:  req.HostServidor,
@@ -270,7 +260,7 @@ func (s *Server) handleBattleInitiate(c *gin.Context) {
 	}
 	s.muBatalhasPeer.Unlock()
 
-	// avisa o player 2 via redis que vai comecar
+	// avisa o player 2 via redis que vai começar
 	s.muPlayers.RLock()
 	infoJ2, ok := s.playerList[req.IdJogadorLocal]
 	s.muPlayers.RUnlock()
@@ -293,11 +283,10 @@ func (s *Server) handleBattleRequestMove(c *gin.Context) {
 		return
 	}
 
-	//s.muTradesPeer.RLock() // ops, aqui seria muBatalhasPeer, mas o original usava logica similar
+	//s.muTradesPeer.RLock() 
 	//_, ok := s.batalhasPeer[req.IdBatalha]
 	//s.muTradesPeer.RUnlock()
 
-	// na arquitetura original mandava msg pro redis, vou simplificar mantendo a notificacao
 	s.notificarClienteBatalha(req.IdBatalha, "Sua_Vez", "Escolha sua carta")
 
 	c.JSON(http.StatusOK, gin.H{"status": "waiting_player"})
@@ -358,7 +347,7 @@ func (s *Server) handleBattleEnd(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"status": "ended"})
 }
 
-// funcoes auxiliares pra nao repetir codigo
+// funcoes auxiliares
 func (s *Server) notificarClienteBatalha(battleID string, tipo string, payload interface{}) {
 	s.muBatalhasPeer.RLock()
 	info, ok := s.batalhasPeer[battleID]
@@ -374,7 +363,7 @@ func (s *Server) notificarClienteBatalha(battleID string, tipo string, payload i
 	}
 }
 
-// --- handlers de troca (simplificados, mesma logica da batalha) ---
+// --- handlers de troca (mesma lógica da batalha) ---
 
 func (s *Server) handleTradeInitiate(c *gin.Context) {
 	var req models.TradeInitiateRequest
