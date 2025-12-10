@@ -1,232 +1,149 @@
 package cardDB
 
 import (
+	"PlanoZ/internal/models"
 	"encoding/json"
 	"errors"
-	"math"
 	"math/rand"
 	"os"
-	"pbl-2-redes/internal/models"
 	"time"
+
+	"github.com/google/uuid"
 )
 
-const CARDS_PER_BOOSTER = 5
+const CARDS_PER_BOOSTER = 3
 
 type CardDB struct {
-	database []models.Card
+	// cachezinho pra guardar o que leu do json
+	definitions map[string]models.CardData
 }
 
 func New() *CardDB {
-	return &CardDB{database: make([]models.Card, 0)}
+	return &CardDB{
+		definitions: make(map[string]models.CardData),
+	}
 }
 
-// passa as cartas que estão no arquivo JSON para um map no próprio programa
-func (cd CardDB) InitializeCardsFromJSON(filename string) (map[string]models.Card, error) {
-	file, error := os.ReadFile(filename)
-	if error != nil {
-		return nil, errors.New("reading file error")
+// le o json com os status base dos tanques
+func (cd *CardDB) InitializeCardsFromJSON(filename string) (map[string]models.CardData, error) {
+	file, err := os.ReadFile(filename)
+	if err != nil {
+		return nil, errors.New("reading file error: " + err.Error())
 	}
 
-	// base de dados de cartas, definido no types
-	// cardDB contém um map de CID e cartas
-	var cardDB models.CardDB
-	error = json.Unmarshal(file, &cardDB)
-	if error != nil {
-		return nil, errors.New("unmarshal error")
+	// wrapper so pra bater com o formato do json {"cards": { "key": { ... } }}
+	type JsonWrapper struct {
+		Cards map[string]models.CardData `json:"cards"`
 	}
 
-	return cardDB.Cards, nil
+	var wrapper JsonWrapper
+	err = json.Unmarshal(file, &wrapper)
+	if err != nil {
+		return nil, errors.New("unmarshal error: " + err.Error())
+	}
+
+	cd.definitions = wrapper.Cards
+	return wrapper.Cards, nil
 }
 
-// carrega quais as cartas existentes no JSON
-func (cd CardDB) LoadCardsFromFile(filename string) (map[string]models.Card, error) {
-	cards, error := cd.InitializeCardsFromJSON(filename)
-	if error != nil {
-		return map[string]models.Card{}, error
-	}
+// calcula quantas copias de cada carta vai ter no total, baseado na raridade (50/40/10)
+func (cd *CardDB) CalculateCardCopies(glossary map[string]models.CardData, totalBoosters int) map[string]int {
+	totalCards := totalBoosters * CARDS_PER_BOOSTER
+	copies := make(map[string]int)
 
-	return cards, nil
-}
-
-// calcula quantidade de cópias de cada carta
-// coloco a quantidade de boosters que quero
-// retorno: map com quantas de cada carta
-func (cd CardDB) CalculateCardCopies(glossary map[string]models.Card, boostersCount int) map[string]int {
-	// conta cartas por tipo
-	remCards := []string{}
-	nremCards := []string{}
-	pillCards := []string{}
-
-	// acrescento cada CID nos slices de string contendo os CIDs
-	for cid, card := range glossary {
-		switch card.CardType {
-		case models.REM:
-			remCards = append(remCards, cid)
-		case models.NREM:
-			nremCards = append(nremCards, cid)
-		case models.Pill:
-			pillCards = append(pillCards, cid)
+	// separa os ids por raridade
+	var commons, uncommons, rares []string
+	for id, card := range glossary {
+		switch card.Raridade {
+		case models.RarityCommon:
+			commons = append(commons, id)
+		case models.RarityUncommon:
+			uncommons = append(uncommons, id)
+		case models.RarityRare:
+			rares = append(rares, id)
+		default:
+			commons = append(commons, id)
 		}
 	}
 
-	totalCardsNeeded := boostersCount * CARDS_PER_BOOSTER
+	// contas de padaria pra saber os totais
+	countCommon := int(float64(totalCards) * 0.50)
+	countUncommon := int(float64(totalCards) * 0.40)
+	countRare := int(float64(totalCards) * 0.10)
 
-	// faço a distribuição por raridade, considerando
-	// 50% das cartas são comuns
-	// 40% das cartas são incomuns
-	// 10% das cartas são raras
-	commonCards := int(float64(totalCardsNeeded) * 0.5)
-	uncommonCards := int(float64(totalCardsNeeded) * 0.4)
-	rareCards := int(float64(totalCardsNeeded) * 0.1)
-
-	copies := make(map[string]int) // map que contém quantidade de cada carta
-
-	// agora, calculo quantas cópias serão necessárias para cada carta
-	for cid, card := range glossary { // passo por cada carta no glossário
-		var neededCopies float64
-
-		switch card.CardRarity {
-		case models.Comum:
-			// divido as raridades proporcionalmente aos cardType
-			commonByType := float64(commonCards) / 3.0 // rem, nrem, pill
-			switch card.CardType {
-			case models.REM:
-				neededCopies = commonByType / float64(len(remCards))
-			case models.NREM:
-				neededCopies = commonByType / float64(len(nremCards))
-			case models.Pill:
-				neededCopies = commonByType / float64(len(pillCards))
-			}
-		case models.Incomum:
-			uncommonByType := float64(uncommonCards) / 3.0
-			switch card.CardType {
-			case models.REM:
-				neededCopies = uncommonByType / float64(len(remCards))
-			case models.NREM:
-				neededCopies = uncommonByType / float64(len(nremCards))
-			case models.Pill:
-				neededCopies = uncommonByType / float64(len(pillCards))
-			}
-		case models.Rara:
-			rareByType := float64(rareCards) / 3.0
-			switch card.CardType {
-			case models.REM:
-				neededCopies = rareByType / float64(len(remCards))
-			case models.NREM:
-				neededCopies = rareByType / float64(len(nremCards))
-			case models.Pill:
-				neededCopies = rareByType / float64(len(pillCards))
-			}
-		}
-
-		finalCopies := int(math.Round(neededCopies))
-
-		// garante pelo menos 1 cópia de cada carta
-		if neededCopies < 1 {
-			neededCopies = 1
-		}
-
-		copies[cid] = finalCopies
-	}
-
-	// agora, verifica se o calculado realmente bate com a quantidade
-	totalCalculated := 0
-	for _, quantity := range copies {
-		totalCalculated += quantity
-	}
-
-	difference := totalCalculated - totalCardsNeeded
-
-	if difference > 0 {
-		// precisa remover cartas, então remove das que têm mais cópias
-		for i := 0; i < difference; i++ {
-			maxCopies := 1
-			maxCardID := ""
-
-			for cardID, quantity := range copies {
-				if quantity > maxCopies {
-					maxCopies = quantity
-					maxCardID = cardID
-				}
-			}
-
-			if maxCardID != "" {
-				copies[maxCardID]--
-			}
-		}
-	} else if difference < 0 {
-		// casoo precise adicionar, adiciona nas que têm menos cópias
-		for i := 0; i < -difference; i++ {
-			minCopies := math.MaxInt32
-			minCardID := ""
-
-			for cardID, quantity := range copies {
-				if quantity < minCopies {
-					minCopies = quantity
-					minCardID = cardID
-				}
-			}
-
-			if minCardID != "" {
-				copies[minCardID]++
+	// distribui igual entre os modelos que tem
+	distribute := func(ids []string, total int) {
+		if len(ids) > 0 {
+			perCard := total / len(ids)
+			if perCard < 1 {
+				perCard = 1
+			} // garante pelo menos uma carta
+			for _, id := range ids {
+				copies[id] = perCard
 			}
 		}
 	}
+
+	distribute(commons, countCommon)
+	distribute(uncommons, countUncommon)
+	distribute(rares, countRare)
 
 	return copies
 }
 
-// crio um "pool" de cartas baseado nas cópias calculadas
-// esse bolo de cartas é utilizado na hora de criar os boosters
-func (cd CardDB) CreateCardPool(glossary map[string]models.Card, copies map[string]int) []models.Card {
-	var pool []models.Card
+// cria as instancias reais dos tanques, com uuids unicos pra blockchain
+func (cd *CardDB) CreateCardPool(glossary map[string]models.CardData, copies map[string]int) []models.Tanque {
+	var pool []models.Tanque
 
 	for cid, quantity := range copies {
-		card := glossary[cid]
+		data, exists := glossary[cid]
+		if !exists {
+			continue
+		}
+
 		for i := 0; i < quantity; i++ {
-			pool = append(pool, card)
+			instance := models.Tanque{
+				ID:        uuid.New().String(), // gera id unico, importante pro ledger
+				Modelo:    data.Modelo,
+				Raridade:  data.Raridade,
+				Vida:      data.Vida,
+				Ataque:    data.Ataque,
+				Timestamp: time.Now().Unix(),
+				OwnerID:   "", // vai ser preenchido na hora da compra
+			}
+			pool = append(pool, instance)
 		}
 	}
-
 	return pool
 }
 
-// possui a lógica para organizar os boosters individualmente
-// a partir de um cardPool de forma aleatória
-// cardPool: tem todas as unidades de cartas geradas já com raridade sortida
-// boostersCount: quantidade de boosters a serem criados
-func (cd CardDB) CreateBoosters(cardPool []models.Card, boostersCount int) ([]models.Booster, error) {
-	// a estrutura vault guarda todos os boosters
-	vault := make([]models.Booster, 0)
-	Generator := rand.New(rand.NewSource(time.Now().UnixNano())) // gerador
+// embaralha tudo e monta os pacotinhos
+func (cd *CardDB) CreateBoosters(cardPool []models.Tanque) []models.Booster {
+	// usa rand local pra nao dar ruim com concorrencia
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
-	// embaralho o pool com o generator
-	Generator.Shuffle(len(cardPool), func(i, j int) {
+	// mistura
+	r.Shuffle(len(cardPool), func(i, j int) {
 		cardPool[i], cardPool[j] = cardPool[j], cardPool[i]
 	})
 
-	// crio os boosters individualmente
-	for i := 0; i < boostersCount; i++ {
-		booster := models.Booster{
-			BID:     i,
-			Booster: make([]models.Card, 0, CARDS_PER_BOOSTER),
+	var boosters []models.Booster
+	numBoosters := len(cardPool) / CARDS_PER_BOOSTER
+
+	for i := 0; i < numBoosters; i++ {
+		start := i * CARDS_PER_BOOSTER
+		end := start + CARDS_PER_BOOSTER
+
+		// copia pra um slice novo pra evitar referencia compartilhada
+		pack := make([]models.Tanque, CARDS_PER_BOOSTER)
+		copy(pack, cardPool[start:end])
+
+		b := models.Booster{
+			BID:   i + 1,
+			Cards: pack,
 		}
-
-		// pego as próximas n cartas do pool
-		startIndex := i * CARDS_PER_BOOSTER
-		endIndex := startIndex + CARDS_PER_BOOSTER
-
-		// verifico se ainda tá dentro do tamanho do pool
-		if endIndex > len(cardPool) {
-			endIndex = len(cardPool)
-		}
-
-		// acrescento as cartas
-		for j := startIndex; j < endIndex; j++ {
-			booster.Booster = append(booster.Booster, cardPool[j])
-		}
-
-		vault = append(vault, booster)
+		boosters = append(boosters, b)
 	}
-	return vault, nil
+
+	return boosters
 }

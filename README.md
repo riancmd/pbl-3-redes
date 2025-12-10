@@ -1,217 +1,224 @@
-# 🌙 Alucinari - Jogo de Cartas Multiplayer Online
+# 🎖️ PlanoZeta - Jogo de Tanques Multiplayer Distribuído
 
-> *"Em Alucinari, seu único objetivo é se manter são num delirante mundo de psicodelia. Com cartas estranhas, que lhe conferem poderes oníricos cada vez mais alucinantes, você precisa derrotar inimigos um por um, fazendo-os acordar... ou se perder mais ainda nesse ilógico labirinto. Cada novo minuto é um novo sonho a se desdobrar. Cada passo dado lhe faz perceber a crua realidade: em Alucinari, não há saída, apenas o próximo duelo."*
+> *"Em PlanoZ, você comanda um pelotão de tanques históricos em batalhas estratégicas PvP. Colecione tanques lendários, negocie com outros comandantes e prove sua superioridade tática em combates turn-based distribuídos."*
 
 ## 📖 Sobre o Jogo
 
-Alucinari é um jogo de cartas multiplayer baseado em turnos onde dois jogadores batalham em um mundo onírico surreal. O objetivo é reduzir a sanidade do oponente a zero enquanto mantém a sua própria sanidade acima de zero.
+PlanoZeta é um jogo de cartas multiplayer baseado em tanques onde dois jogadores batalham usando decks montados com veículos blindados históricos. O sistema utiliza uma arquitetura distribuída com múltiplos servidores, Redis Cluster e eleição automática de líder. Agora, conta com uma Blockchain Customizada para garantir a integridade, propriedade e histórico de todas as ações críticas do jogo.
+
+## 🚀 O Que Mudou? (Novas Features)
+
+- Blockchain & Ledger Imutável:
+
+Todas as compras, trocas e resultados de batalha são registrados em blocos.
+
+O histórico é público e verificável por qualquer nó da rede.
+
+- Proof of Work (Mineração):
+
+Os servidores agora atuam como Mineradores.
+
+Eles competem para resolver um desafio criptográfico (PoW) com dificuldade ajustável (targetBits), garantindo a segurança da rede contra spam e fraudes.
+
+- Criptografia & Segurança (ECDSA):
+
+Sua Chave, Seus Tanques: Cada jogador possui um par de chaves (Pública/Privada).
+
+Assinatura Digital: O servidor não aceita "ordens". Ele valida transações assinadas. Você assina o pedido de compra ou troca no cliente, e o servidor apenas valida e transmite para a Mempool.
+
+- Consenso Distribuído:
+
+Além da eleição de líder para orquestração (via Redis), os nós propagam blocos minerados via P2P. Se um bloco é válido, ele é anexado à cadeia local de cada servid
 
 ### 🎮 Mecânicas de Jogo
 
-- **Sanidade**: Cada jogador começa com 40 pontos de sanidade
-- **Estados de Sonho**: Os jogadores podem estar em diferentes estados mentais que afetam o gameplay:
-  - 😴 **Adormecido**: Estado padrão, perde 3 pontos de sanidade por turno
-  - 😎 **Consciente**: Recupera 1 ponto de sanidade por turno (dura 2 turnos)
-  - 🚫 **Paralisado**: Perde o turno (dura 1 turno)
-  - 😱 **Assustado**: Perde 4 pontos de sanidade por turno (dura 2 turnos)
+- **Vida dos Tanques**: Cada tanque possui vida e ataque únicos
+- **Sistema de Batalha**: Turnos simultâneos onde ambos jogadores escolhem cartas
+- **Pareamento**: Conecte-se com outro jogador antes de batalhar
+- **Troca de Cartas**: Negocie tanques com jogadores pareados
+- **Compra de Boosters**: Adquira pacotes com 3 cartas aleatórias
 
-### 🃏 Tipos de Cartas
+### 🚜 Categorias de Tanques
 
-- **REM**: Cartas que causam dano ao oponente
-- **NREM**: Cartas que causam dano ao oponente
-- **Pill**: Cartas que curam o próprio jogador
-
-### ⭐ Raridades das Cartas
-
-- **Comum**: 50% das cartas nos boosters
-- **Incomum**: 40% das cartas nos boosters
-- **Rara**: 10% das cartas nos boosters
+- **Light**: Tanques leves e ágeis (M22, BMP, Fox, AMX13)
+- **Medium**: Tanques médios balanceados (Sherman, T-34, Panther, M47)
+- **Heavy**: Tanques pesados devastadores (Tiger II, IS-6, KV-2, Maus)
 
 ## 📋 Pré-requisitos
 
-Antes de começar, você precisa instalar:
-
-### Go
-- **Versão**: 1.19 ou superior
-- **Download**: [https://golang.org/](https://golang.org/)
-- **Documentação**: [https://golang.org/doc/](https://golang.org/doc/)
-
-### Docker
-- **Download**: [https://www.docker.com/](https://www.docker.com/)
-- **Documentação**: [https://docs.docker.com/](https://docs.docker.com/)
-
-## 🏗️ Estrutura do Projeto
-
+- **Docker**: 20.10 ou superior
+- **Docker Compose**: 2.0 ou superior
+- **Portas Livres**: 6379-6381 (Redis), 9090-9092 (API), 8081-8083 (UDP)
 ```
-alucinari/
-├── server/
-│   ├── server.go
-│   ├── types.go
-│   ├── cardVault.go
-│   ├── handlers.go
-│   ├── matchManager.go
-│   ├── playerManager.go
-│   └── data/
-│       └── cardVault.json
-├── client/
-│   └── client.go
-├── bots.go
-└── docker-compose.yml
-```
+
+### 🔧 Tecnologias
+
+- **Backend**: Go 1.21
+- **Banco de Dados em memória**: Redis Cluster (3 nós)
+- **Comunicação**: REST API + Pub/Sub Redis + UDP
+- **Containerização**: Docker multi-stage builds
+- **Eleição de Líder**: Algoritmo baseado em health checks e menor ID alfabético
 
 ## 🚀 Como Executar
 
-### 🐳 Opção 1: Usando Docker (Recomendado)
-
-1. **Clone o repositório**:
-   ```bash
-   git clone <url-do-repositorio>
-   cd alucinari
-   ```
-
-2. **Execute com Docker Compose**:
-   ```bash
-   docker-compose up --build
-   ```
-
-3. **Para conectar mais clientes**, em terminais separados:
-   ```bash
-   docker-compose run client
-   ```
-
-### 🖥️ Opção 2: Executando no Terminal
-
-1. **Execute o servidor**:
-   ```bash
-   cd server
-   go run *.go
-   ```
-
-2. **Em outro terminal, execute o cliente**:
-   ```bash
-   cd client
-   go run client.go
-   ```
-
-3. **Para mais clientes**, repita o passo 2 em novos terminais.
+### 📦 Preparação Inicial
+Antes de iniciar os servidores, compile as imagens Docker:
+### 1) Passo: Abrir em um terminal_1 e digitar
+```
+bash
+docker compose build --no-cache
+```
+### 2) Passo: Mesmo terminal_1 e digitar
+```
+bash
+docker compose up -d redis-node-1 redis-node-2 redis-node-3 redis-cluster-init
+```
+### 3) Passo: Abrir outro terminal_2 e digitar
+```
+bash
+docker compose run --service-ports --name server1 server1
+```
+### 4) Passo: Abrir outro terminal_3 e digitar
+```
+bash
+docker compose run --service-ports --no-deps --name server2 server2
+```
+### 5) Passo: Abrir outro terminal_4 e digitar
+```
+bash
+docker compose run --service-ports --no-deps --name server3 server3
+```
+### 6) Passo: Ir em cada terminal dos servers (terminal_2, _3, _4) e dar enter para fazer eleição
+### 7) Passo: Abrir outro terminal_5 (um para rodar cada cliente diferente) e digitar:
+```
+bash
+docker compose run --rm client
+```
 
 ## 🎯 Como Jogar
 
-### 📝 Menu Principal
+### 📝 Comandos Disponíveis
 
-1. **Registrar**: Crie uma nova conta
-2. **Login**: Entre com uma conta existente
-3. **Comprar booster**: Adquira novos pacotes de cartas
-4. **Ver inventário**: Visualize suas cartas
-5. **Batalhar**: Entre na fila de matchmaking
-6. **Ping**: Teste a latência com o servidor
+#### Estado Livre (após conectar)
+- `Parear <id_jogador>` - Parear com outro jogador
+- `Abrir` - Comprar pacote de cartas (3 cartas aleatórias)
+- `Ping` - Medir latência UDP com o servidor
+- `Ver Blockchain`- Apresenta os blocos atuais da Blockchain
+- `Sair` - Desconectar
 
-### ⚔️ Durante a Batalha
+#### Estado Pareado
+- `Batalhar` - Iniciar batalha (requer 5+ cartas no inventário)
+- `Trocar` - Propor troca de cartas
+- `Abrir` - Comprar mais cartas
+- `Ping` - Testar conexão
 
-- Você recebe 10 cartas aleatórias do seu inventário
-- No seu turno, escolha uma carta pelo número (1-10)
-- Digite `gv` para desistir da partida
-- Monitore sua sanidade e estado de sonho
-- Vença reduzindo a sanidade do oponente a zero!
+#### Durante Troca
+- `list` - Ver suas cartas
+- `ofertar <número>` - Ofertar carta específica (1 a N)
+- `cancelar` - Cancelar troca
 
-## 🤖 Testando com Bots
+#### Durante Batalha
+- O servidor escolhe automaticamente 5 cartas aleatórias do seu deck
+- Aguarde o servidor solicitar sua jogada
+- O resultado é calculado automaticamente
 
-Para testar o servidor com múltiplos jogadores automatizados:
+## 🌐 Portas Utilizadas
 
-1. **Execute o servidor** (Docker ou terminal)
+### Redis Cluster
+- `6379` - redis-node-1
+- `6380` - redis-node-2
+- `6381` - redis-node-3
 
-2. **Execute os bots**:
-   ```bash
-   go run bots.go
-   ```
+### Servidores de Jogo
+- `9090` - Server1 API REST
+- `9091` - Server2 API REST
+- `9092` - Server3 API REST
+- `8081/UDP` - Server1 Ping
+- `8082/UDP` - Server2 Ping
+- `8083/UDP` - Server3 Ping
 
-3. **Personalize a quantidade de bots**:
-   - Edite a constante `NUMBOTS` no arquivo `bots.go`
-   - Ou use variável de ambiente:
-     ```bash
-     NUM_BOTS=100 go run bots.go
-     ```
+## 🏆 Sistema de Eleição de Líder
 
-### 🔧 Configurações dos Bots
+O sistema utiliza eleição automática baseada em:
+- **Health Checks**: Verificação periódica (a cada 5s)
+- **Critério de Eleição**: Menor ID alfabético entre servidores vivos
+- **Failover Automático**: Se o líder cai, nova eleição é iniciada
+- **Reconexão de Clientes**: Clientes detectam queda e reconectam automaticamente
 
-- **Padrão**: 500 bots simultâneos
-- **Comportamento**: Registram automaticamente, compram boosters e batalham
-- **Estratégia**: Jogam sempre a primeira carta da mão
-- **Conexão**: Aguardam 200ms * ID antes de conectar (evita sobrecarga)
-
-## 🌐 Configurações de Rede
-
-### Portas Utilizadas
-
-- **8080/TCP**: Comunicação principal do jogo
-- **8081/UDP**: Teste de latência (ping)
-
-### Variáveis de Ambiente
-
-- `SERVER_ADDR`: Endereço do servidor (padrão: `:8080`)
-- `PORT`: Porta do servidor (padrão: `8080`)
-- `NUM_BOTS`: Quantidade de bots para teste
-
-## 🏆 Estratégias de Vitória
-
-1. **Gerencie sua sanidade**: Use cartas Pill quando necessário
-2. **Controle os estados**: Cartas com efeitos podem mudar o rumo da partida
-3. **Timing é crucial**: Alguns estados duram múltiplos turnos
-4. **Diversifique seu deck**: Tenha diferentes tipos de cartas disponíveis
-
-## 🔧 Desenvolvimento
-
-### Adicionar Novas Cartas
-
-Edite o arquivo `server/data/cardVault.json` seguindo a estrutura:
-
-```json
-{
-  "cards": {
-    "CARD_ID": {
-      "name": "Nome da Carta",
-      "CID": "CARD_ID",
-      "desc": "Descrição da carta",
-      "cardtype": "rem|nrem|pill",
-      "cardrarity": "comum|incomum|rara",
-      "cardeffect": "adormecido|consciente|paralisado|assustado|nenhum",
-      "points": 0
-    }
-  }
-}
+### Estados do Servidor
+```
+✓ server1 está ONLINE
+✓ server2 está ONLINE  
+✓ server3 está ONLINE
+🎖️  NOVO LÍDER ELEITO: server1
 ```
 
-### Logs do Servidor
+## 🔍 Monitoramento
 
-O servidor exibe estatísticas a cada 2 segundos:
-- Jogadores inscritos
-- Jogadores online
-- Estoque de boosters
-- Partidas ativas
+### Verificar Status do Cluster Redis
+```bash
+docker exec redis-node-1 redis-cli -h SEU_IP -p 6379 cluster info
+```
+
+### Verificar Containers Ativos
+```bash
+docker compose ps
+```
 
 ## 🐛 Troubleshooting
 
-### Problemas Comuns
+### Problema: "Port already allocated"
+**Solução:**
+```bash
+docker compose down --remove-orphans
+docker volume prune -f
+```
 
-1. **"Erro ao criar estoque"**: Verifique se `cardVault.json` existe e está válido
-2. **"Usuário já logado"**: Um player só pode ter uma sessão ativa
-3. **"Timeout"**: Verifique a conectividade de rede
-4. **Docker não inicia**: Certifique-se que as portas 8080 e 8081 estão livres
+### Problema: "CLUSTERDOWN Hash slot not served"
+**Causa**: Cluster Redis não está pronto
 
-### Logs Úteis
+**Solução:**
+```bash
+# Aguarde mais tempo após iniciar o redis-cluster-init
+# Ou verifique o status:
+docker exec redis-node-1 redis-cli cluster info
+```
 
-- Servidor: Mostra conexões, matchmaking e estatísticas
-- Cliente: Exibe estado do jogo e notificações
-- Bots: Prefixo `[Bot ID - Nome]` para cada ação
+### Problema: Cliente não recebe respostas
+**Soluções:**
+1. Verifique se pressionou ENTER nos servidores
+2. Confirme que um líder foi eleito (veja os logs)
+3. Teste conectividade com o Redis
 
-## 📚 Arquitetura Técnica
+## 🧹 Limpeza
 
-- **Linguagem**: Go 1.19+
-- **Comunicação**: TCP com JSON
-- **Concorrência**: Goroutines para cada cliente e partida
-- **Sincronização**: Mutexes para thread-safety
-- **Containerização**: Docker com multi-stage builds
+```bash
+# Parar todos os containers
+docker compose down --remove-orphans
+
+# Limpar volumes do Redis
+docker volume prune -f
+
+# Limpar imagens não utilizadas
+docker image prune -a
+```
+
+## 📚 Comandos Úteis
+
+```bash
+# Ver todos os containers (incluindo parados)
+docker ps -a
+
+# Reiniciar apenas servidores
+docker compose restart server1 server2 server3
+
+# Ver uso de recursos
+docker stats
+
+# Acessar logs em tempo real
+docker compose logs -f
+```
 
 ---
 
-*Mergulhe no mundo surreal de Alucinari e teste sua sanidade contra outros jogadores! 🎭✨*
+*Assuma o comando e domine o campo de batalha em PlanoZ! 🎖️🚜*
