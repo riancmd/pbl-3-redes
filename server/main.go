@@ -1,116 +1,261 @@
 package main
 
 import (
+	"bufio"
+	"context"
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"sync"
+	"time"
+
+	"PlanoZ/internal/blockchain"
+	"PlanoZ/internal/models"
+	"PlanoZ/internal/utils/cardDB"
+
+	"github.com/fatih/color"
+	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
-var (
-	vault      *CardVault
-	pm         *PlayerManager
-	mm         *MatchManager
-	registerMu sync.RWMutex
-	loginMu    sync.RWMutex
+// configs gerais
+const (
+	// topicos do redis
+	TopicoConectar     = "conectar"
+	TopicoComprarCarta = "comprar_carta"
+
+	// configs de rede
+	HealthCheckInterval = 5 * time.Second
+	RequestTimeout      = 2 * time.Second
 )
+
+// struct principal do servidor
+type Server struct {
+	ID         string
+	Host       string // ex: "server1:9090"
+	UDPAddr    string // ex: "server1:8083"
+	IsLeader   bool
+	StartTimer time.Time
+
+	// nova arquitetura
+	Blockchain *blockchain.Blockchain
+	CardDB     *cardDB.CardDB
+	Boosters   []models.Booster // estoque local de boosters
+
+	// redis
+	redisClient *redis.ClusterClient
+	ctx         context.Context
+
+	// controle de lideranca e cluster
+	currentLeader string
+	serverList    map[string]string // id -> host api
+	liveServers   map[string]bool   // quem ta vivo
+	muLeader      sync.RWMutex
+	muLiveServers sync.RWMutex
+
+	// memoria do jogo
+	playerList map[string]models.PlayerInfo // lista de players online
+	muPlayers  sync.RWMutex
+
+	batalhas   map[string]*models.Batalha // batalhas rolando (so no host)
+	muBatalhas sync.Mutex
+
+	trades   map[string]*models.Troca // trocas rolando
+	muTrades sync.Mutex
+
+	// mapas pra comunicacao peer to peer (saber pra quem responder)
+	batalhasPeer   map[string]models.PeerBattleInfo
+	muBatalhasPeer sync.RWMutex
+
+	tradesPeer   map[string]models.PeerTradeInfo
+	muTradesPeer sync.RWMutex
+
+	// api engine
+	ginEngine *gin.Engine
+}
+
+// info basica de onde o player ta
+type PlayerInfo struct {
+	ServerID     string
+	ServerHost   string
+	ReplyChannel string // canal do redis pra falar com ele
+}
 
 func main() {
-	// COMUNICAÇÃO HTTP DEOPIS DO GET
-	/*
-		for {
-			if port != 7777 {
-				res, err := http.Get("http://localhost:7777/cards")
+	// 1. pega configs do ambiente (docker compose)
+	serverID := os.Getenv("SERVER_ID")
+	apiPort := os.Getenv("API_PORT")
+	udpPort := os.Getenv("UDP_PORT")
+	redisAddrs := os.Getenv("REDIS_ADDRS")
+	serverListEnv := os.Getenv("SERVER_LIST")
 
-				if err != nil {
-					panic(err)
-				}
+	if serverID == "" {
+		serverID = "server-unknown-" + uuid.New().String()
+	}
 
-				body, err := ioutil.ReadAll(res.Body)
-				if err != nil {
-					log.Fatalf("Error reading response body: %v", err)
-				}
+	// 2. conecta no redis cluster
+	rdb := redis.NewClusterClient(&redis.ClusterOptions{
+		Addrs: strings.Split(redisAddrs, ","),
+	})
 
-				log.Printf("Response Body: %s", string(body))
+	ctx := context.Background()
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		color.Red("Falha ao conectar no Redis: %v", err)
+		// em prod daria panic, aqui a gente segue na fe
+	} else {
+		color.Green("Conectado ao Redis Cluster!")
+	}
 
+	// 3. parse da lista de servidores pra descoberta inicial
+	sList := make(map[string]string)
+	if serverListEnv != "" {
+		parts := strings.Split(serverListEnv, ",")
+		for _, p := range parts {
+			// p = "server1:9090"
+			hostParts := strings.Split(p, ":")
+			if len(hostParts) >= 1 {
+				sID := hostParts[0] // usa hostname como id
+				sList[sID] = p
 			}
 		}
-	*/
-
-	// cria vault e mm
-	vault = NewCardVault()
-	mm = NewMatchManager()
-
-	error := vault.LoadCardsFromFile("data/cardVault.json")
-
-	// verifica se realmente criou o estoque
-	if error != nil {
-		fmt.Println("Erro ao criar estoque") // debug
-		panic(error)
 	}
 
-	// cria os boosters, adicionando-o
-	error = vault.createBoosters(1000)
+	// 4. sobe o DB de cartas e blockchain
+	cd := cardDB.New()
 
-	// verifica se realmente criou os boosters
-	if error != nil {
-		fmt.Println("Erro ao criar boosters") // debug
-		panic(error)
+	// carrega o json (tem que estar na raiz do workdir)
+	color.Cyan("Carregando banco de dados de cartas...")
+	definitions, err := cd.InitializeCardsFromJSON("cardVault.json")
+	var generatedBoosters []models.Booster
+
+	if err != nil {
+		color.Red("Erro crítico ao carregar cardVault.json: %v. O servidor iniciará sem cartas.", err)
+		generatedBoosters = []models.Booster{}
+	} else {
+		// gera estoque inicial (100 boosters)
+		copies := cd.CalculateCardCopies(definitions, 100)
+		pool := cd.CreateCardPool(definitions, copies)
+		generatedBoosters = cd.CreateBoosters(pool)
+		color.Green("Estoque gerado: %d boosters disponíveis.", len(generatedBoosters))
 	}
 
-	// cria o gerenciador de usuários
-	pm = NewPlayerManager()
+	bc := blockchain.New()
 
-	// começa goroutine para pareamento
-	go mm.matchmakingLoop()
+	// monta a struct do server
+	s := &Server{
+		ID:         serverID,
+		Host:       serverID + ":" + apiPort,
+		UDPAddr:    serverID + ":" + udpPort,
+		StartTimer: time.Now(),
 
-	// info logs
-	go logServerStats() // printa a cada 2 seg
+		Blockchain: bc,
+		CardDB:     cd,
+		Boosters:   generatedBoosters,
 
-	address := ":8080"          //porta usada
-	envVar := os.Getenv("PORT") // usa env para pode trocar a porta qndo preciso
-
-	if envVar != "" { // coloca porta definida como porta
-		address = envVar
+		redisClient:  rdb,
+		ctx:          ctx,
+		serverList:   sList,
+		liveServers:  make(map[string]bool),
+		playerList:   make(map[string]models.PlayerInfo),
+		batalhas:     make(map[string]*models.Batalha),
+		batalhasPeer: make(map[string]models.PeerBattleInfo),
+		trades:       make(map[string]*models.Troca),
+		tradesPeer:   make(map[string]models.PeerTradeInfo),
 	}
 
-	listener, error := net.Listen("tcp", address)
+	// 5. solta as goroutines em background
 
-	// verifica erro na conexão
-	if error != nil {
-		fmt.Println("Erro ao criar listener") // debug
-		panic(error)                          // para a execução e sinaliza erro
+	// A) loop da blockchain (processa blocos que chegam)
+	go s.Blockchain.RunBlockchainLoop()
+
+	// B) ouve redis (conexoes e compras globais)
+	go s.listenRedisGlobal(TopicoConectar)
+	go s.listenRedisGlobal(TopicoComprarCarta)
+
+	// C) sobe udp
+	go s.RunUDP(udpPort)
+
+	// D) sobe api rest
+	s.ginEngine = s.setupRouter()
+	go s.RunAPI(apiPort)
+
+	// minerador e listener de blocos
+	go s.RunBlockListener()
+	go s.RunMiner()
+
+	// 6. logs pra gente saber onde ta rodando
+	externalPort := os.Getenv("EXTERNAL_PORT")
+	if externalPort == "" {
+		externalPort = apiPort
 	}
 
-	fmt.Println("Servidor do Alucinari ouvindo na porta", address)
+	color.Cyan("===========================================")
+	color.Cyan("  PLANO Z - SERVIDOR BLOCKCHAIN")
+	color.Cyan("===========================================")
+	color.White("Server ID:      %s", s.ID)
+	color.White("API Interna:    %s:%s", serverID, apiPort)
+	color.White("API Externa:    localhost:%s", externalPort)
+	color.White("UDP Interna:    %s:%s", serverID, udpPort)
+	color.White("Servidores:     %v", s.serverList)
+	color.Cyan("===========================================")
 
-	// cria listener UDP para pings na porta 8081
-	go handlerPing()
+	// 7. espera sinal manual pra comecar a brincadeira (eleicao)
+	color.Yellow("\nPressione ENTER para iniciar Health Checks e Eleição...")
+	bufio.NewReader(os.Stdin).ReadString('\n')
 
-	// cria loop para as conexões novas
-	for {
-		connection, error := listener.Accept() // aceita nova conexão
+	// 8. comeca a pingar os amiguinhos
+	go s.RunHealthChecks()
 
-		if error != nil {
-			continue
+	// 9. da um tempo pra descobrir quem ta vivo
+	color.Yellow("Aguardando descoberta de nós (3s)...")
+	time.Sleep(3 * time.Second)
+
+	// 10. mostra quem achou
+	s.muLiveServers.RLock()
+	color.Green("Nós vivos detectados: %d", len(s.liveServers))
+	for id, alive := range s.liveServers {
+		if alive {
+			color.Green("  ✓ %s", id)
 		}
+	}
+	s.muLiveServers.RUnlock()
 
-		go connectionHandler(connection)
+	// 11. bora votar
+	color.Yellow("\nIniciando eleição de líder...")
+	s.electNewLeader(nil)
+
+	// 12. segura a execucao
+	select {}
+}
+
+// funcoes de inicializacao
+
+// sobe o gin
+func (s *Server) RunAPI(port string) {
+	color.Green("Iniciando servidor API Gin na porta :%s", port)
+	// ouve em "0.0.0.0:port"
+	if err := s.ginEngine.Run(":" + port); err != nil {
+		panic(fmt.Sprintf("Falha ao iniciar Gin: %v", err))
 	}
 }
 
-// cria conexão udp com porta 8081 p pings
-func handlerPing() {
-	address, _ := net.ResolveUDPAddr("udp", ":8081") // cria conexão pela porta 8081
-	connection, _ := net.ListenUDP("udp", address)
-	defer connection.Close()
-
-	buffer := make([]byte, 1024)
-	for {
-		n, remote, _ := connection.ReadFromUDP(buffer)
-		msg := string(buffer[:n])
-		if msg == "ping" { // verifica se recebeu ping
-			connection.WriteToUDP([]byte("pong"), remote) // manda PONG de volta
-		}
+// sobe o udp
+func (s *Server) RunUDP(port string) {
+	// ouve em "0.0.0.0:port"
+	udpAddr, err := net.ResolveUDPAddr("udp", ":"+port)
+	if err != nil {
+		color.Red("Erro ao resolver porta UDP %s: %v", port, err)
+		return
 	}
+	udpConn, err := net.ListenUDP("udp", udpAddr)
+	if err != nil {
+		color.Red("Erro na criação da porta UDP %s: %v", port, err)
+		return
+	}
+	defer udpConn.Close()
+
+	color.Green("Servidor UDP ouvindo em :%s", port)
+	s.lidarPing(udpConn)
 }

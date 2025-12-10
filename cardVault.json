@@ -1,0 +1,76 @@
+{
+  "cards": {
+    "light_m22": {
+      "modelo": "M22 Locust",
+      "raridade": "comum",
+      "vida": 40,
+      "ataque": 15
+    },
+    "light_fox": {
+      "modelo": "FV721 Fox",
+      "raridade": "comum",
+      "vida": 35,
+      "ataque": 20
+    },
+    "med_sherman": {
+      "modelo": "M4 Sherman",
+      "raridade": "comum",
+      "vida": 60,
+      "ataque": 25
+    },
+    "med_t34": {
+      "modelo": "T-34-85",
+      "raridade": "comum",
+      "vida": 55,
+      "ataque": 30
+    },
+    "light_amx": {
+      "modelo": "AMX 13",
+      "raridade": "incomum",
+      "vida": 45,
+      "ataque": 45
+    },
+    "med_panther": {
+      "modelo": "Panther",
+      "raridade": "incomum",
+      "vida": 80,
+      "ataque": 40
+    },
+    "med_m47": {
+      "modelo": "M47 Patton",
+      "raridade": "incomum",
+      "vida": 85,
+      "ataque": 45
+    },
+    "heavy_kv2": {
+      "modelo": "KV-2",
+      "raridade": "incomum",
+      "vida": 100,
+      "ataque": 80
+    },
+    "light_bmp": {
+      "modelo": "BMP-1",
+      "raridade": "rara",
+      "vida": 60,
+      "ataque": 70
+    },
+    "heavy_tiger": {
+      "modelo": "Tiger II",
+      "raridade": "rara",
+      "vida": 150,
+      "ataque": 65
+    },
+    "heavy_is6": {
+      "modelo": "IS-6",
+      "raridade": "rara",
+      "vida": 160,
+      "ataque": 60
+    },
+    "heavy_maus": {
+      "modelo": "Maus",
+      "raridade": "rara",
+      "vida": 300,
+      "ataque": 50
+    }
+  }
+}
