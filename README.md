@@ -58,40 +58,35 @@ Além da eleição de líder para orquestração (via Redis), os nós propagam b
 - **Comunicação**: REST API + Pub/Sub Redis + UDP
 - **Containerização**: Docker multi-stage builds
 - **Eleição de Líder**: Algoritmo baseado em health checks e menor ID alfabético
-
+```
 ## 🚀 Como Executar
 
 ### 📦 Preparação Inicial
 Antes de iniciar os servidores, compile as imagens Docker:
 ### 1) Passo: Abrir em um terminal_1 e digitar
+
 ```
-bash
 docker compose build --no-cache
 ```
 ### 2) Passo: Mesmo terminal_1 e digitar
 ```
-bash
 docker compose up -d redis-node-1 redis-node-2 redis-node-3 redis-cluster-init
 ```
 ### 3) Passo: Abrir outro terminal_2 e digitar
 ```
-bash
 docker compose run --service-ports --name server1 server1
 ```
 ### 4) Passo: Abrir outro terminal_3 e digitar
 ```
-bash
 docker compose run --service-ports --no-deps --name server2 server2
 ```
 ### 5) Passo: Abrir outro terminal_4 e digitar
 ```
-bash
 docker compose run --service-ports --no-deps --name server3 server3
 ```
 ### 6) Passo: Ir em cada terminal dos servers (terminal_2, _3, _4) e dar enter para fazer eleição
 ### 7) Passo: Abrir outro terminal_5 (um para rodar cada cliente diferente) e digitar:
 ```
-bash
 docker compose run --rm client
 ```
 
